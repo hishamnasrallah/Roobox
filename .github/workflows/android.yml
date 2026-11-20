@@ -99,9 +99,37 @@ jobs:
           path: build/server/roobox_server.x86_64
           if-no-files-found: error
 
+  backend:
+    name: Backend test (real Nakama + Postgres)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Nakama + Postgres
+        run: |
+          cd backend
+          docker compose up -d postgres nakama
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:7350/healthcheck > /dev/null; then echo "nakama is up"; break; fi
+            sleep 2
+          done
+          docker compose ps
+
+      - name: Godot client vs real backend
+        run: |
+          docker run --rm --network host -v "$PWD:/w" -w /w barichello/godot-ci:4.7.2 bash -c \
+            'godot --headless --path game --import > /dev/null 2>&1; godot --headless --path game -- --backendtest --backend http://127.0.0.1:7350' 2>&1 \
+            | grep -vE "fontconfig|os_linuxbsd" | tee backend.log
+          grep -q "BACKENDTEST PASS" backend.log
+
+      - name: Nakama logs
+        if: always()
+        run: cd backend && docker compose logs nakama | tail -80
+
   publish:
     name: Publish dev-latest release (direct APK link)
-    needs: build
+    needs: [build, backend]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:

@@ -41,6 +41,13 @@ var shirt_index: int = 0
 var pants_index: int = 0
 var skin_index: int = 0
 var server_address: String = "127.0.0.1"
+## Coins collected across all sessions (saved locally + in the cloud).
+var lifetime_coins: int = 0
+## Account server (Nakama), e.g. "http://203.0.113.5:7350". Empty = guest.
+var backend_url: String = ""
+var backend_key: String = "defaultkey"
+## Stable random id for device login (generated once per install).
+var device_id: String = ""
 
 ## Set by the player on _ready.
 var player: CharacterBody3D = null
@@ -78,6 +85,13 @@ func load_profile() -> void:
 		skin_index = int(cfg.get_value("profile", "skin", 0))
 		server_address = str(cfg.get_value("net", "address", "127.0.0.1"))
 		best_times = cfg.get_value("stats", "best_times", {}) as Dictionary
+		lifetime_coins = int(cfg.get_value("stats", "coins", 0))
+		backend_url = str(cfg.get_value("online", "backend_url", ""))
+		backend_key = str(cfg.get_value("online", "backend_key", "defaultkey"))
+		device_id = str(cfg.get_value("online", "device_id", ""))
+	if device_id.length() < 16:
+		device_id = _new_device_id()
+		save_profile()
 	if player_name.strip_edges() == "":
 		player_name = "Player%d" % (randi() % 9000 + 1000)
 	shirt_index = clampi(shirt_index, 0, SHIRT_COLORS.size() - 1)
@@ -93,7 +107,16 @@ func save_profile() -> void:
 	cfg.set_value("profile", "skin", skin_index)
 	cfg.set_value("net", "address", server_address)
 	cfg.set_value("stats", "best_times", best_times)
+	cfg.set_value("stats", "coins", lifetime_coins)
+	cfg.set_value("online", "backend_url", backend_url)
+	cfg.set_value("online", "backend_key", backend_key)
+	cfg.set_value("online", "device_id", device_id)
 	cfg.save(PROFILE_PATH)
+
+
+func _new_device_id() -> String:
+	var crypto := Crypto.new()
+	return "roobox-" + crypto.generate_random_bytes(16).hex_encode()
 
 
 ## Profile as a plain dictionary (safe to send over the network).
@@ -128,6 +151,7 @@ func register_coin() -> void:
 
 func add_coin() -> void:
 	coins += 1
+	lifetime_coins += 1
 	coins_changed.emit(coins)
 	Sfx.play("coin")
 

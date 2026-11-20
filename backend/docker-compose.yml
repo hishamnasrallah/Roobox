@@ -1,0 +1,64 @@
+# Roobox backend: Nakama (accounts, friends, storage, leaderboards) + Postgres
+# + the Roobox dedicated game server.
+#
+#   cp .env.example .env    # then edit the passwords!
+#   docker compose --profile game up -d
+#
+# Ports: 7350/tcp (Nakama API, used by the app), 7777/udp (game server).
+# The Nakama admin console (7351) is bound to localhost only; reach it with
+# an SSH tunnel:  ssh -L 7351:127.0.0.1:7351 user@your-server
+name: roobox
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nakama
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdb}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "nakama"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  nakama:
+    image: heroiclabs/nakama:3.42.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: /bin/sh -ecx
+    command: >-
+      "/nakama/nakama migrate up --database.address postgres:${POSTGRES_PASSWORD:-localdb}@postgres:5432/nakama &&
+      exec /nakama/nakama --name roobox1
+      --database.address postgres:${POSTGRES_PASSWORD:-localdb}@postgres:5432/nakama
+      --runtime.path /nakama/data/modules
+      --runtime.env GAME_SERVERS=${GAME_SERVERS:-}
+      --socket.server_key ${NAKAMA_SERVER_KEY:-defaultkey}
+      --console.username ${NAKAMA_CONSOLE_USER:-admin}
+      --console.password ${NAKAMA_CONSOLE_PASSWORD:-change-me-now}
+      --session.token_expiry_sec 86400
+      --logger.level INFO"
+    volumes:
+      - ./modules:/nakama/data/modules:ro
+    ports:
+      - "7350:7350"
+      - "127.0.0.1:7351:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  game:
+    image: ghcr.io/hishamnasrallah/roobox-server:latest
+    profiles: ["game"]
+    restart: unless-stopped
+    ports:
+      - "7777:7777/udp"
+
+volumes:
+  db:

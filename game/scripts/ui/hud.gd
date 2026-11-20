@@ -4,6 +4,7 @@ extends CanvasLayer
 ## toasts, respawn fade and the course-complete panel.
 
 signal home_pressed
+signal menu_pressed
 
 const CHAT_LINES := 7
 const CHAT_TTL := 14.0
@@ -85,7 +86,7 @@ func _ready() -> void:
 	# --- Buttons (top-right) ---
 	var btn_row := HBoxContainer.new()
 	btn_row.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	btn_row.offset_left = -330
+	btn_row.offset_left = -460
 	btn_row.offset_right = -24
 	btn_row.offset_top = 16
 	btn_row.offset_bottom = 80
@@ -100,6 +101,10 @@ func _ready() -> void:
 	home_btn.custom_minimum_size.x = 120
 	home_btn.pressed.connect(func() -> void: home_pressed.emit())
 	btn_row.add_child(home_btn)
+	var menu_btn := UiStyle.button("MENU", Color(0.45, 0.45, 0.55), 24, 60)
+	menu_btn.custom_minimum_size.x = 120
+	menu_btn.pressed.connect(func() -> void: menu_pressed.emit())
+	btn_row.add_child(menu_btn)
 
 	_stats_label = UiStyle.label(18)
 	_stats_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
@@ -301,11 +306,22 @@ func _on_course_completed(course_name: String, time_sec: float) -> void:
 	var best: float = Game.best_times.get(course_name, time_sec)
 	_win_stats.text = "%s\nTime  %s\nBest  %s" % [course_name, _format_time(time_sec), _format_time(best)]
 	_win_panel.visible = true
+	if Backend.online:
+		_show_world_rank(course_name)
 	_win_panel.modulate.a = 0.0
 	_win_panel.scale = Vector2(0.8, 0.8)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_win_panel, "modulate:a", 1.0, 0.4).set_delay(0.8)
 	tw.tween_property(_win_panel, "scale", Vector2.ONE, 0.45).set_delay(0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _show_world_rank(course_name: String) -> void:
+	await get_tree().create_timer(1.2).timeout
+	var rows: Array = await Backend.top_times(course_name, 100)
+	for r: Dictionary in rows:
+		if r["mine"]:
+			add_chat_line("World rank on %s: #%d" % [course_name, r["rank"]], Color(1.0, 0.85, 0.3))
+			return
 
 
 func _build_win_panel(root: Control) -> void:

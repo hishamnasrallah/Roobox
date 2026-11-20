@@ -28,6 +28,11 @@ func _ready() -> void:
 	if OS.has_feature("dedicated_server") or args.has("--server"):
 		_run_server(args)
 		return
+	if args.has("--backendtest"):
+		var bt: Node = load("res://scripts/debug/backend_test.gd").new()
+		bt.set("url", _arg(args, "--backend", "http://127.0.0.1:7350"))
+		add_child(bt)
+		return
 
 	Game.reset_run()
 	if args.has("--name"):
@@ -91,6 +96,8 @@ func _show_menu() -> void:
 	add_child(_menu_cam)
 	_menu_cam.make_current()
 	_rebuild_preview()
+	if Game.backend_url != "" and not Backend.online and not Backend.busy:
+		Backend.connect_backend()
 
 
 func _rebuild_preview() -> void:
@@ -113,6 +120,18 @@ func _on_play_requested(mode: String, address: String) -> void:
 				menu.show_status("Could not host a game (error %d). Is another game already hosting?" % err, true)
 				return
 			_start_game()
+		"online":
+			menu.set_busy(true)
+			menu.show_status("Finding a game server...")
+			var servers: Array = await Backend.game_servers()
+			if menu == null:
+				return
+			if servers.is_empty():
+				menu.set_busy(false)
+				menu.show_status("No game servers available right now.", true)
+				return
+			Game.server_address = str(servers[0])
+			_on_play_requested("client", Game.server_address)
 		"client":
 			var parsed := Network.parse_address(address)
 			var err := Network.join(parsed[0], parsed[1])
@@ -195,6 +214,7 @@ func _start_game() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	hud.home_pressed.connect(_go_home)
+	hud.menu_pressed.connect(_back_to_menu)
 	hud.refresh_coins()
 
 	match Network.mode:
@@ -209,6 +229,13 @@ func _start_game() -> void:
 	for id: int in Network.players:
 		if id != Network.my_id():
 			_add_remote(id, Network.players[id])
+
+
+func _back_to_menu() -> void:
+	Network.leave()
+	if Backend.online:
+		await Backend.push_progress()
+	Game.restart()
 
 
 func _go_home() -> void:
