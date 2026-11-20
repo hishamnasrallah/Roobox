@@ -39,6 +39,11 @@ func _ready() -> void:
 	add_child(hud)
 	hud.refresh_coins()
 
+	if OS.get_cmdline_user_args().has("--selftest"):
+		var t: Node = load("res://scripts/debug/self_test.gd").new()
+		t.set("main", self)
+		add_child(t)
+
 
 func _build_environment() -> void:
 	var sky_mat := ProceduralSkyMaterial.new()

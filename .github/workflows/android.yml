@@ -37,6 +37,11 @@ jobs:
           fi
           grep -q "SMOKE OK" smoke.log || { echo "::error::Main scene did not run"; exit 1; }
 
+      - name: Input self-test (simulated touch + keyboard)
+        run: |
+          godot --headless --path game --fixed-fps 60 --quit-after 1800 -- --selftest 2>&1 | tee selftest.log
+          grep -q "SELFTEST PASS" selftest.log || { echo "::error::Input self-test failed"; exit 1; }
+
       - name: Export debug APK
         run: |
           mkdir -p build/android
