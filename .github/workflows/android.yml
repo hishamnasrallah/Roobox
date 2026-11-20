@@ -71,6 +71,12 @@ jobs:
           done
           exit $fail
 
+      - name: Studio test (build, edit, save, test-play)
+        run: |
+          godot --headless --path game --fixed-fps 60 --quit-after 2400 -- --studiotest 2>&1 | grep -vE "fontconfig|os_linuxbsd" | tee studio.log
+          if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" studio.log; then exit 1; fi
+          grep -q "STUDIOTEST PASS" studio.log
+
       - name: Multiplayer tests (dedicated server + 2 clients per game)
         shell: bash
         run: |

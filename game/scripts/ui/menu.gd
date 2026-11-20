@@ -5,6 +5,7 @@ extends CanvasLayer
 
 signal play_requested(exp_id: String, mode: String, address: String)
 signal profile_changed
+signal studio_requested(slot: String)
 
 var _account_label: Label
 var _status: Label
@@ -58,8 +59,8 @@ func _ready() -> void:
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 8)
 	vb.add_child(tabs)
-	for t in ["PLAY", "AVATAR", "FRIENDS", "RECORDS", "SETTINGS"]:
-		var b := UiStyle.button(t, Color(0.25, 0.3, 0.48), 20, 54)
+	for t in ["PLAY", "CREATE", "AVATAR", "FRIENDS", "RECORDS", "SETTINGS"]:
+		var b := UiStyle.button(t, Color(0.25, 0.3, 0.48), 18, 54)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var tab_name: String = t
 		b.pressed.connect(func() -> void: open_tab(tab_name))
@@ -103,6 +104,8 @@ func open_tab(t: String) -> void:
 	match t:
 		"PLAY":
 			_build_discover()
+		"CREATE":
+			_build_create()
 		"AVATAR":
 			_build_avatar()
 		"FRIENDS":
@@ -192,7 +195,100 @@ func _build_discover() -> void:
 	grid.add_theme_constant_override("v_separation", 14)
 	_content.add_child(grid)
 	for e: Dictionary in Catalog.ENTRIES:
-		grid.add_child(_card(e))
+		if not e.get("hidden", false):
+			grid.add_child(_card(e))
+	_text(_content, "Community games", 34, Color(1.0, 0.85, 0.3))
+	if not Backend.online:
+		_text(_content, "Connect an account server (SETTINGS) to play games made by other players.", 20, Color(1, 1, 1, 0.6))
+		return
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	_content.add_child(box)
+	_text(box, "Loading...", 20, Color(1, 1, 1, 0.6))
+	_load_community(box)
+
+
+func _load_community(box: VBoxContainer) -> void:
+	var games: Array = await Backend.list_community(40)
+	if not is_instance_valid(box):
+		return
+	for ch in box.get_children():
+		ch.queue_free()
+	if games.is_empty():
+		_text(box, "No community games yet - make one in CREATE and publish it!", 20, Color(1, 1, 1, 0.6))
+		return
+	for g: Dictionary in games:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		box.add_child(row)
+		var l := _text(row, "%s   by %s   (%d parts)" % [g["name"], g["author"], g["parts"]], 22)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var item: Dictionary = g
+		var solo := UiStyle.button("PLAY", Color(0.2, 0.72, 0.35), 18, 50)
+		solo.custom_minimum_size.x = 110
+		solo.pressed.connect(func() -> void: _play_community(item, "offline"))
+		row.add_child(solo)
+		var host := UiStyle.button("HOST", Color(0.25, 0.5, 0.95), 18, 50)
+		host.custom_minimum_size.x = 110
+		host.pressed.connect(func() -> void: _play_community(item, "host"))
+		row.add_child(host)
+		_busy_buttons.append(solo)
+		_busy_buttons.append(host)
+
+
+func _play_community(item: Dictionary, mode: String) -> void:
+	set_busy(true)
+	show_status("Downloading %s..." % item["name"])
+	var lvl: Dictionary = await Backend.load_community(item["owner"], item["key"])
+	set_busy(false)
+	if lvl.is_empty():
+		show_status("Could not download this game.", true)
+		return
+	Game.pending_level = lvl
+	Game.testing = false
+	_play("ugc", mode, "")
+
+
+# -------------------------------------------------------------- create ---
+
+func _build_create() -> void:
+	_text(_content, "Roobox Studio", 34, Color(1.0, 0.85, 0.3))
+	_text(_content, "Build your own game with blocks, ramps, lava, jump pads, coins and a finish line. Test it, then publish it for everyone.", 20, Color(1, 1, 1, 0.85))
+	var new_btn := UiStyle.button("+ NEW GAME", Color(0.2, 0.72, 0.35))
+	new_btn.pressed.connect(func() -> void: studio_requested.emit(""))
+	_content.add_child(new_btn)
+	var saved := Level.list_saved()
+	if saved.is_empty():
+		_text(_content, "Your games will appear here.", 20, Color(1, 1, 1, 0.6))
+		return
+	_text(_content, "Your games", 26)
+	for g: Dictionary in saved:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_content.add_child(row)
+		var l := _text(row, "%s   (%d parts)" % [g["name"], g["parts"]], 22)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var slot: String = g["slot"]
+		for spec in [["EDIT", Color(0.95, 0.55, 0.2)], ["PLAY", Color(0.2, 0.72, 0.35)],
+				["HOST", Color(0.25, 0.5, 0.95)], ["DELETE", Color(0.6, 0.3, 0.3)]]:
+			var b := UiStyle.button(spec[0], spec[1], 16, 48)
+			b.custom_minimum_size.x = 96
+			var action: String = spec[0]
+			b.pressed.connect(func() -> void: _creation_action(slot, action))
+			row.add_child(b)
+
+
+func _creation_action(slot: String, action: String) -> void:
+	match action:
+		"EDIT":
+			studio_requested.emit(slot)
+		"PLAY", "HOST":
+			Game.pending_level = Level.load_slot(slot)
+			Game.testing = false
+			_play("ugc", "offline" if action == "PLAY" else "host", "")
+		"DELETE":
+			Level.delete_slot(slot)
+			open_tab("CREATE")
 
 
 func _card(e: Dictionary) -> Control:

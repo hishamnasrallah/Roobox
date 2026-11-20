@@ -175,6 +175,51 @@ func top_times(course_name: String, limit: int = 10) -> Array:
 	return rows
 
 
+# ---------------------------------------------------------- community ---
+
+## Publishes a Studio creation: full level + a small public index entry.
+func publish_game(slot: String, level: Dictionary) -> bool:
+	if not online:
+		return false
+	var lvl := Level.sanitize(level)
+	var r1 := await client.write_object("games", slot, lvl, true)
+	if not r1["ok"]:
+		last_error = str(r1["error"])
+		return false
+	var r2 := await client.write_object("games_index", slot, {
+		"name": lvl["name"],
+		"author": Game.player_name,
+		"username": client.username,
+		"parts": (lvl["parts"] as Array).size(),
+		"updated": int(Time.get_unix_time_from_system()),
+	}, true)
+	return r2["ok"]
+
+
+## Community games: [{owner, key, name, author, parts}] (newest first).
+func list_community(limit: int = 40) -> Array:
+	if not online:
+		return []
+	var rows: Array = await client.list_public("games_index", limit)
+	var out: Array = []
+	for r: Dictionary in rows:
+		var v: Dictionary = r["value"]
+		out.append({
+			"owner": r["user_id"], "key": r["key"],
+			"name": str(v.get("name", "Untitled")), "author": str(v.get("author", "?")),
+			"parts": int(v.get("parts", 0)), "updated": int(v.get("updated", 0)),
+		})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["updated"]) > int(b["updated"]))
+	return out
+
+
+func load_community(owner: String, key: String) -> Dictionary:
+	if not online:
+		return {}
+	var data := await client.read_object("games", key, owner)
+	return Level.sanitize(data) if not data.is_empty() else {}
+
+
 # ------------------------------------------------------------ friends ---
 
 ## Returns [{id, username, name, online, state}] (state: 0 friend, 1 sent, 2 received).

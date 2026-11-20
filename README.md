@@ -52,6 +52,15 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 كل لعبة: SOLO / PLAY ONLINE / HOST ON WI-FI / JOIN. بالألعاب الجماعية السيرفر (أو الـ Host) هو الحَكَم على توقيت الجولات.
 لإضافة لعبة جديدة: كلاس يورث `Experience` (العالم) + اختيارياً `GameMode` (منطق الجولات) + سطر بـ `Catalog.ENTRIES`.
 
+## Roobox Studio (اصنع لعبتك)
+
+من تبويب **CREATE** ← **+ NEW GAME**:
+- **الكاميرا:** جويستك للتحريك، سحب للدوران، pinch للزووم، UP/DOWN للارتفاع (بالكمبيوتر: WASD + Q/E + الماوس).
+- **الأدوات:** BUILD (المس مكان لتحط قطعة — بتلزق على سطح القطعة اللي لمستها وبتنضبط عالشبكة)، PAINT، DELETE، ROTATE، UNDO.
+- **القطع:** BLOCK، PLATE، FLOOR، BEAM، WALL، PILLAR، RAMP، BALL، ROUND + قطع خاصة: SPAWN، CHECKPOINT، LAVA، JUMP PAD، COIN، FINISH.
+- **TEST** بيشغّل لعبتك فوراً (MENU بيرجعك للمحرر)، **SAVE** على الجهاز، **PUBLISH** بينشرها بـ COMMUNITY.
+- الألعاب المنشورة بتبيّن بتبويب PLAY تحت **Community games** — PLAY أو HOST على الـ Wi-Fi (اللاعبين اللي بيعملوا JOIN بيستلموا اللعبة تلقائياً).
+
 ## العالم
 
 جزيرة كبيرة فيها ساحة spawn و 4 بوابات:
@@ -107,7 +116,8 @@ game/                      مشروع Godot
     debug/                 اختبارات CI الآلية
     fx/fx.gd               مواد + particles
     online/                Nakama REST client + خدمات الحساب
-    experiences/           الألعاب: Experience + GameMode + Catalog
+    experiences/           الألعاب: Experience + GameMode + Catalog (+ ugc.gd لألعاب الناس)
+    studio/                المحرر (studio.gd) + صيغة الألعاب (level.gd)
 server/Dockerfile          صورة السيرفر المستقل
 backend/                   docker compose (Nakama + Postgres + game) + Lua modules
 docs/ROADMAP.md            خطة المراحل

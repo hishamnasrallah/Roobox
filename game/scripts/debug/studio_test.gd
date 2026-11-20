@@ -1,0 +1,101 @@
+extends Node
+## CI test for Roobox Studio:
+##   godot --headless --path game --fixed-fps 60 -- --studiotest
+## Places parts, rotates, paints, deletes, undoes, saves/loads, then
+## test-plays the creation and checks the player stands on the spawn.
+
+var main: Node3D
+var _fails: Array[String] = []
+
+
+func _ready() -> void:
+	_run()
+
+
+func _check(ok: bool, what: String, detail: Variant = "") -> void:
+	print("STUDIOTEST %s %s %s" % ["ok  " if ok else "FAIL", what, str(detail) if not ok else ""])
+	if not ok:
+		_fails.append(what)
+
+
+func _p(part: Dictionary) -> Vector3:
+	return Level.pos(part)
+
+
+func _run() -> void:
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var st: Studio = main.get("studio")
+	_check(st != null, "studio opened")
+	if st == null:
+		_finish()
+		return
+	var n0 := st.part_count()
+	_check(n0 == 2, "new level has baseplate + spawn", n0)
+
+	st.set_preset("block")
+	var p1 := st.place_at(Vector3(6, 0, 6), Vector3.UP)
+	_check(_p(p1) == Vector3(6, 1, 6), "block snaps onto the baseplate", p1)
+	var p2 := st.place_at(Vector3(6.3, 2.0, 6.2), Vector3.UP)
+	_check(_p(p2) == Vector3(6, 3, 6), "block stacks on top", p2)
+	var p3 := st.place_at(Vector3(7, 1, 6), Vector3.RIGHT)
+	_check(_p(p3) == Vector3(8, 1, 6), "block attaches to a side face", p3)
+
+	st.set_preset("ramp")
+	st.rotate_preset()
+	var p4 := st.place_at(Vector3(-6, 0, -6), Vector3.UP)
+	_check(int(p4.get("r", -1)) == 1 and p4["t"] == "ramp", "rotated ramp", p4)
+	st.rotate_preset()
+	st.rotate_preset()
+	st.rotate_preset()
+
+	var i := 0
+	for id in ["checkpoint", "kill", "jumppad", "coin", "finish"]:
+		st.set_preset(id)
+		st.place_at(Vector3(-20 + i * 8, 0, -20), Vector3.UP)
+		i += 1
+	st.set_preset("spawn")
+	st.place_at(Vector3(10, 0, -10), Vector3.UP)
+	var spawns := 0
+	for p: Dictionary in st.level["parts"]:
+		if p["t"] == "spawn":
+			spawns += 1
+	_check(spawns == 1, "only one spawn after moving it", spawns)
+
+	var before := st.part_count()
+	st.set_color(9)
+	st.paint(st._entry_of_part(p3))
+	_check(int(p3["c"]) == 9, "paint changes color", p3)
+	st.remove(st._entry_of_part(p3))
+	_check(st.part_count() == before - 1, "delete removes the part")
+	st.undo()
+	_check(st.part_count() == before, "undo restores the deleted part")
+	st.undo()
+	_check(int(p3["c"]) != 9, "undo reverts the paint", p3)
+
+	_check(st.save(), "save to disk")
+	var slot := st.slot
+	var loaded := Level.load_slot(slot)
+	_check((loaded["parts"] as Array).size() == st.part_count(), "load gives the same parts",
+		[(loaded["parts"] as Array).size(), st.part_count()])
+
+	# Test-play the creation.
+	st._on_test()
+	await get_tree().create_timer(2.5).timeout
+	var ex: Experience = main.get("experience")
+	var player: Player = main.get("player")
+	_check(ex != null and ex.id == "ugc", "test play starts the ugc experience")
+	_check(player != null and player.is_on_floor(), "player stands on the spawn",
+		player.global_position if player != null else null)
+	_check(Game.total_coins >= 1, "coin part became a collectible", Game.total_coins)
+	_check(Game.current_course != "", "finish part starts the course timer")
+	Level.delete_slot(slot)
+	_finish()
+
+
+func _finish() -> void:
+	if _fails.is_empty():
+		print("STUDIOTEST PASS")
+	else:
+		print("STUDIOTEST FAIL: " + ", ".join(_fails))
+	get_tree().quit(0 if _fails.is_empty() else 1)

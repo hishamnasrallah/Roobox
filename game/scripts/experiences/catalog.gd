@@ -29,6 +29,12 @@ const ENTRIES: Array[Dictionary] = [
 		"color": Color(0.25, 0.6, 1.0), "max": 32,
 		"scene": "res://scripts/experiences/obby_rush.gd", "mode": "",
 	},
+	{
+		"id": "ugc", "title": "Community Game", "tag": "CREATED", "hidden": true,
+		"desc": "A game made in Roobox Studio.",
+		"color": Color(0.95, 0.5, 0.6), "max": 16,
+		"scene": "res://scripts/experiences/ugc.gd", "mode": "",
+	},
 ]
 
 ## Leaderboards: id -> {title, kind}. kind: "time" (lower wins) or a unit word.

@@ -41,6 +41,7 @@ services:
       --console.username ${NAKAMA_CONSOLE_USER:-admin}
       --console.password ${NAKAMA_CONSOLE_PASSWORD:-change-me-now}
       --session.token_expiry_sec 86400
+      --socket.max_request_size_bytes 4194304
       --logger.level INFO"
     volumes:
       - ./modules:/nakama/data/modules:ro

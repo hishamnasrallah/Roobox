@@ -146,6 +146,20 @@ func read_object(collection: String, key: String, owner_id: String = "") -> Dict
 	return parsed if parsed is Dictionary else {}
 
 
+## Lists publicly readable objects of a collection (all users).
+## Returns [{key, user_id, value: Dictionary}] (empty on error).
+func list_public(collection: String, limit: int = 50) -> Array:
+	var r := await request(HTTPClient.METHOD_GET, "/v2/storage/%s?limit=%d" % [q(collection), limit])
+	if not r["ok"]:
+		return []
+	var out: Array = []
+	for o: Dictionary in (r["data"] as Dictionary).get("objects", []):
+		var v: Variant = JSON.parse_string(str(o.get("value", "{}")))
+		out.append({"key": str(o.get("key", "")), "user_id": str(o.get("user_id", "")),
+			"value": v if v is Dictionary else {}})
+	return out
+
+
 # ------------------------------------------------------------ friends ---
 
 ## Returns [{user: {...}, state: FriendState}] (empty on error).

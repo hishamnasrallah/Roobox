@@ -9,6 +9,19 @@ const JOY_RADIUS := 110.0
 const KNOB_RADIUS := 46.0
 const JUMP_RADIUS := 80.0
 const DEADZONE := 0.12
+const TAP_TIME := 0.3
+const TAP_MOVE := 18.0
+
+## A quick touch on the right side (camera area) that didn't drag.
+signal tapped(screen_pos: Vector2)
+
+## Studio hides the jump button.
+var show_jump: bool = true
+## UI panels where touches must not start joystick/camera input.
+var blockers: Array[Control] = []
+var _look_start: Vector2 = Vector2.ZERO
+var _look_start_t: float = 0.0
+var _look_moved: float = 0.0
 
 var _joy_index: int = -1
 var _joy_center: Vector2 = Vector2.ZERO
@@ -71,8 +84,11 @@ func _on_touch(t: InputEventScreenTouch) -> void:
 	if t.pressed:
 		if t.position.y < TOP_RESERVED:
 			return
+		for c in blockers:
+			if is_instance_valid(c) and c.is_visible_in_tree() and c.get_global_rect().has_point(t.position):
+				return
 		_touch_pos[t.index] = t.position
-		if _jump_index == -1 and t.position.distance_to(_jump_center()) < JUMP_RADIUS * 1.3:
+		if show_jump and _jump_index == -1 and t.position.distance_to(_jump_center()) < JUMP_RADIUS * 1.3:
 			_jump_index = t.index
 			Game.touch_jump_held = true
 			Game.press_jump()
@@ -82,6 +98,9 @@ func _on_touch(t: InputEventScreenTouch) -> void:
 			_joy_knob = t.position
 		elif _look_index == -1:
 			_look_index = t.index
+			_look_start = t.position
+			_look_start_t = Time.get_ticks_msec() / 1000.0
+			_look_moved = 0.0
 		elif _pinch_index == -1:
 			_pinch_index = t.index
 	else:
@@ -93,6 +112,9 @@ func _on_touch(t: InputEventScreenTouch) -> void:
 			_jump_index = -1
 			Game.touch_jump_held = false
 		elif t.index == _look_index:
+			var quick := Time.get_ticks_msec() / 1000.0 - _look_start_t < TAP_TIME
+			if quick and _look_moved < TAP_MOVE and _pinch_index == -1:
+				tapped.emit(t.position)
 			_look_index = _pinch_index
 			_pinch_index = -1
 		elif t.index == _pinch_index:
@@ -127,6 +149,7 @@ func _on_drag(d: InputEventScreenDrag) -> void:
 			var after := d.position.distance_to(other)
 			Game.add_zoom(-(after - before) * 0.03)
 		elif d.index == _look_index:
+			_look_moved += (d.position - prev).length()
 			Game.add_look_touch(d.position - prev)
 
 
@@ -141,6 +164,8 @@ func _draw() -> void:
 	draw_arc(base, JOY_RADIUS, 0.0, TAU, 64, Color(1, 1, 1, 0.35), 4.0, true)
 	draw_circle(knob, KNOB_RADIUS, Color(1, 1, 1, 0.38 if not active else 0.6))
 
+	if not show_jump:
+		return
 	# Jump button with an up arrow.
 	var jc := _jump_center()
 	var pressed := _jump_index != -1

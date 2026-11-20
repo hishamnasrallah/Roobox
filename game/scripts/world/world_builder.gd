@@ -16,7 +16,7 @@ var _batches: Dictionary = {}     # "kind|cx|cz" -> {xforms: Array, colors: Pack
 var _bodies: Dictionary = {}      # Vector2i -> StaticBody3D
 var _shape_cache: Dictionary = {} # Vector3 -> BoxShape3D
 var _materials: Dictionary = {}
-var _unit_box := BoxMesh.new()
+var _unit_meshes: Dictionary = {}
 
 
 func _init(parent: Node3D) -> void:
@@ -28,12 +28,18 @@ func _init(parent: Node3D) -> void:
 ##       "ground" (tiled, always drawn, no shadow casting), "far" (always drawn).
 func box(pos: Vector3, size: Vector3, color: Color, collide: bool = true,
 		kind: String = "tiled", rot: Vector3 = Vector3.ZERO) -> void:
+	part("box", pos, size, color, collide, kind, rot)
+
+
+## Adds a primitive. shape: "box", "ramp" (wedge, high side at -X), "ball", "cyl".
+func part(shape: String, pos: Vector3, size: Vector3, color: Color, collide: bool = true,
+		kind: String = "tiled", rot: Vector3 = Vector3.ZERO) -> void:
 	var rb := Basis.from_euler(rot)
 	var xf := Transform3D(rb * Basis.from_scale(size), pos)
 	var ck := Vector2i(floori(pos.x / CHUNK), floori(pos.z / CHUNK))
-	var key := "%s|%d|%d" % [kind, ck.x, ck.y]
+	var key := "%s|%s|%d|%d" % [kind, shape, ck.x, ck.y]
 	if not _batches.has(key):
-		_batches[key] = {"xforms": [], "colors": PackedColorArray(), "kind": kind, "chunk": ck}
+		_batches[key] = {"xforms": [], "colors": PackedColorArray(), "kind": kind, "chunk": ck, "shape": shape}
 	var b: Dictionary = _batches[key]
 	(b["xforms"] as Array).append(xf)
 	var cols: PackedColorArray = b["colors"]
@@ -44,7 +50,7 @@ func box(pos: Vector3, size: Vector3, color: Color, collide: bool = true,
 	if collide:
 		var body := _body_for(ck)
 		var col := CollisionShape3D.new()
-		col.shape = _shape(size)
+		col.shape = collision_shape(shape, size)
 		col.transform = Transform3D(rb, pos)
 		body.add_child(col)
 
@@ -59,7 +65,7 @@ func build() -> void:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_colors = true
-		mm.mesh = _unit_box
+		mm.mesh = unit_mesh(b["shape"])
 		mm.instance_count = xforms.size()
 		for i in xforms.size():
 			mm.set_instance_transform(i, xforms[i])
@@ -88,13 +94,67 @@ func _body_for(ck: Vector2i) -> StaticBody3D:
 	return body
 
 
-func _shape(size: Vector3) -> BoxShape3D:
-	var k := size.snapped(Vector3.ONE * 0.01)
-	if not _shape_cache.has(k):
-		var s := BoxShape3D.new()
-		s.size = k
-		_shape_cache[k] = s
-	return _shape_cache[k] as BoxShape3D
+## Collision shape for a primitive of the given size (cached).
+func collision_shape(shape: String, size: Vector3) -> Shape3D:
+	var k := "%s|%s" % [shape, size.snapped(Vector3.ONE * 0.01)]
+	if _shape_cache.has(k):
+		return _shape_cache[k] as Shape3D
+	var s: Shape3D
+	match shape:
+		"ramp":
+			var c := ConvexPolygonShape3D.new()
+			var pts := PackedVector3Array()
+			for v in [Vector3(-0.5, -0.5, -0.5), Vector3(-0.5, -0.5, 0.5), Vector3(0.5, -0.5, -0.5),
+					Vector3(0.5, -0.5, 0.5), Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, 0.5, 0.5)]:
+				pts.append((v as Vector3) * size)
+			c.points = pts
+			s = c
+		"ball":
+			var sp := SphereShape3D.new()
+			sp.radius = maxf(size.x, maxf(size.y, size.z)) * 0.5
+			s = sp
+		"cyl":
+			var cy := CylinderShape3D.new()
+			cy.radius = maxf(size.x, size.z) * 0.5
+			cy.height = size.y
+			s = cy
+		_:
+			var bx := BoxShape3D.new()
+			bx.size = size
+			s = bx
+	_shape_cache[k] = s
+	return s
+
+
+## Unit-sized mesh for a primitive (cached).
+func unit_mesh(shape: String) -> Mesh:
+	if _unit_meshes.has(shape):
+		return _unit_meshes[shape] as Mesh
+	var m: Mesh
+	match shape:
+		"ramp":
+			var pm := PrismMesh.new()
+			pm.left_to_right = 0.0
+			pm.size = Vector3.ONE
+			m = pm
+		"ball":
+			var sm := SphereMesh.new()
+			sm.radius = 0.5
+			sm.height = 1.0
+			sm.radial_segments = 20
+			sm.rings = 10
+			m = sm
+		"cyl":
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.5
+			cm.bottom_radius = 0.5
+			cm.height = 1.0
+			cm.radial_segments = 20
+			m = cm
+		_:
+			m = BoxMesh.new()
+	_unit_meshes[shape] = m
+	return m
 
 
 func _material(kind: String) -> StandardMaterial3D:

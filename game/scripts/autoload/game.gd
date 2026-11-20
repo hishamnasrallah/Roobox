@@ -51,6 +51,13 @@ var backend_key: String = "defaultkey"
 ## Stable random id for device login (generated once per install).
 var device_id: String = ""
 
+## Level to play in the "ugc" experience (Studio test / creations / community).
+var pending_level: Dictionary = {}
+## Studio: slot being edited, test-play flag, and slot to reopen after a test.
+var studio_slot: String = ""
+var testing: bool = false
+var resume_studio: String = ""
+
 ## Set by the player on _ready.
 var player: CharacterBody3D = null
 

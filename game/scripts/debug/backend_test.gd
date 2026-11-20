@@ -101,6 +101,26 @@ func _run() -> void:
 	var servers := await Backend.game_servers()
 	_check(servers.size() >= 1, "game server list (with fallback)", servers)
 
+	# --- Community games (Studio publishing) ---
+	var lvl := Level.new_level("CI Game " + tag)
+	var pub_ok: bool = await Backend.publish_game("ci" + tag, lvl)
+	_check(pub_ok, "publish a Studio game", Backend.last_error)
+	var games: Array = await Backend.list_community(50)
+	var found: Dictionary = {}
+	for g: Dictionary in games:
+		if g["key"] == "ci" + tag:
+			found = g
+	_check(not found.is_empty() and found["name"] == "CI Game " + tag, "game listed in COMMUNITY", games.size())
+	if not found.is_empty():
+		var dl: Dictionary = await Backend.load_community(found["owner"], found["key"])
+		_check((dl.get("parts", []) as Array).size() == 2, "download the published level", dl)
+	var as_bob := await b.list_public("games_index", 50)
+	var bob_sees := false
+	for o: Dictionary in as_bob:
+		if o["key"] == "ci" + tag:
+			bob_sees = true
+	_check(bob_sees, "another player sees the published game")
+
 	_finish()
 
 

@@ -14,6 +14,7 @@ var avatar: Avatar
 var camera_rig: CameraRig
 var hud: Hud
 var menu: MainMenu
+var studio: Studio
 
 var _menu_stage: Node3D
 var _menu_cam: Camera3D
@@ -51,7 +52,16 @@ func _ready() -> void:
 	Network.state_received.connect(_on_state_received)
 	Network.mode_event.connect(_on_network_mode_event)
 
-	if args.has("--selftest"):
+	if Game.resume_studio != "":
+		var resume := Game.resume_studio
+		Game.resume_studio = ""
+		_start_studio(resume)
+	elif args.has("--studiotest"):
+		_start_studio("")
+		var st: Node = load("res://scripts/debug/studio_test.gd").new()
+		st.set("main", self)
+		add_child(st)
+	elif args.has("--selftest"):
 		_start_game("island")
 		var t: Node = load("res://scripts/debug/self_test.gd").new()
 		t.set("main", self)
@@ -122,6 +132,7 @@ func _show_menu() -> void:
 	add_child(menu)
 	menu.play_requested.connect(_on_play_requested)
 	menu.profile_changed.connect(_rebuild_preview)
+	menu.studio_requested.connect(_start_studio)
 
 	_menu_cam = Camera3D.new()
 	_menu_cam.fov = 55
@@ -222,6 +233,9 @@ func _on_connect_timeout() -> void:
 func _on_welcomed(exp_id: String, snapshot: Dictionary) -> void:
 	if _in_game:
 		return
+	if exp_id == "ugc":
+		Game.pending_level = Level.sanitize(snapshot.get("level", {}))
+		Game.testing = false
 	_start_game(exp_id)
 	if not snapshot.is_empty() and experience != null:
 		experience.apply_event(snapshot)
@@ -243,17 +257,47 @@ func _on_connection_failed(reason: String) -> void:
 
 # --------------------------------------------------------------- game ---
 
-func _start_game(exp_id: String) -> void:
-	if _in_game:
-		return
-	_in_game = true
-	for n: Node in [menu, _menu_cam, _preview, _menu_stage]:
+func _clear_menu() -> void:
+	for n: Node in [menu, _menu_cam, _preview, _menu_stage, studio]:
 		if n != null:
 			n.queue_free()
 	menu = null
 	_menu_cam = null
 	_preview = null
 	_menu_stage = null
+	studio = null
+
+
+# ------------------------------------------------------------- studio ---
+
+func _start_studio(slot: String) -> void:
+	_clear_menu()
+	studio = Studio.new()
+	studio.name = "Studio"
+	if slot == "":
+		studio.slot = Level.new_slot()
+		studio.level = Level.new_level("%s's Game" % Game.player_name)
+	else:
+		studio.slot = slot
+		studio.level = Level.load_slot(slot)
+	studio.exit_requested.connect(func() -> void: Game.restart())
+	studio.test_requested.connect(_on_studio_test)
+	add_child(studio)
+
+
+func _on_studio_test(level: Dictionary) -> void:
+	Game.pending_level = level.duplicate(true)
+	Game.testing = true
+	Game.studio_slot = studio.slot
+	Network.leave()
+	_start_game("ugc")
+
+
+func _start_game(exp_id: String) -> void:
+	if _in_game:
+		return
+	_in_game = true
+	_clear_menu()
 
 	experience = Catalog.create(exp_id)
 	add_child(experience)
@@ -298,6 +342,8 @@ func _start_game(exp_id: String) -> void:
 
 	if Network.mode == "offline" or Network.mode == "host":
 		_start_mode(exp_id)
+	if exp_id == "ugc":
+		Network.snapshot_provider = func() -> Dictionary: return {"t": "level", "level": Game.pending_level}
 
 	var title: String = Catalog.get_entry(exp_id)["title"]
 	match Network.mode:
@@ -315,6 +361,9 @@ func _start_game(exp_id: String) -> void:
 
 
 func _back_to_menu() -> void:
+	if Game.testing:
+		Game.resume_studio = Game.studio_slot
+		Game.testing = false
 	Network.leave()
 	if Backend.online:
 		await Backend.push_progress()
