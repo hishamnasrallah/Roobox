@@ -28,6 +28,16 @@ jobs:
       - name: Import project
         run: godot --headless --path game --import 2>&1 | tee import.log
 
+      - name: Compile-check every script (detailed errors)
+        shell: bash
+        run: |
+          fail=0
+          for f in $(cd game && find scripts -name '*.gd' | sort); do
+            out=$(godot --headless --path game --check-only --script "res://$f" 2>&1 | grep -E "SCRIPT ERROR|Parse Error|ERROR: .*res://" -A2 | grep -v "does not inherit from")
+            if echo "$out" | grep -q "Parse Error"; then echo "---- $f"; echo "$out"; fail=1; fi
+          done
+          exit $fail
+
       - name: Smoke test (menu -> solo game)
         run: |
           godot --headless --path game --fixed-fps 60 --quit-after 600 2>&1 | tee smoke.log

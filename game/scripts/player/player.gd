@@ -132,8 +132,8 @@ func _physics_process(delta: float) -> void:
 	if _net_timer >= NET_RATE and Network.is_online():
 		_net_timer = 0.0
 		var flags := (1 if is_on_floor() else 0) | (2 if _dead else 0)
-		var yaw := avatar.rotation.y if avatar != null else _target_yaw
-		Network.send_state(global_position, yaw, get_real_velocity(), flags)
+		var net_yaw := avatar.rotation.y if avatar != null else _target_yaw
+		Network.send_state(global_position, net_yaw, get_real_velocity(), flags)
 
 
 func _process(delta: float) -> void:
