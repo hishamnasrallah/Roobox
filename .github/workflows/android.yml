@@ -59,22 +59,40 @@ jobs:
           if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" selftest.log; then exit 1; fi
           grep -q "SELFTEST PASS" selftest.log || { echo "::error::Input self-test failed"; exit 1; }
 
-      - name: Multiplayer test (dedicated server + 2 clients)
+      - name: Game mode tests (each experience solo)
         shell: bash
         run: |
           set +e
-          godot --headless --path game -- --server --port 7788 > server.log 2>&1 &
-          SERVER=$!
-          sleep 3
-          godot --headless --path game -- --nettest --port 7788 --name Alice > alice.log 2>&1 &
-          ALICE=$!
-          godot --headless --path game -- --nettest --port 7788 --name Bob > bob.log 2>&1
-          BOB_RC=$?
-          wait $ALICE; ALICE_RC=$?
-          kill $SERVER
-          for f in server alice bob; do echo "===== $f"; grep -vE "fontconfig|os_linuxbsd" $f.log; done
-          if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" server.log alice.log bob.log; then exit 1; fi
-          grep -q "NETTEST Alice PASS" alice.log && grep -q "NETTEST Bob PASS" bob.log && [ $ALICE_RC -eq 0 ] && [ $BOB_RC -eq 0 ]
+          fail=0
+          for exp in lava_rising color_drop obby_rush; do
+            godot --headless --path game --fixed-fps 60 --quit-after 4000 -- --modetest $exp 2>&1 | grep -vE "fontconfig|os_linuxbsd" > mode_$exp.log
+            grep -E "MODETEST|SCRIPT ERROR|Invalid (call|access|assignment)" -A2 mode_$exp.log
+            if ! grep -q "MODETEST $exp PASS" mode_$exp.log || grep -qE "SCRIPT ERROR|Invalid (call|access|assignment)" mode_$exp.log; then fail=1; fi
+          done
+          exit $fail
+
+      - name: Multiplayer tests (dedicated server + 2 clients per game)
+        shell: bash
+        run: |
+          set +e
+          fail=0
+          port=7788
+          for exp in island color_drop; do
+            port=$((port + 1))
+            godot --headless --path game -- --server --port $port --experience $exp > server_$exp.log 2>&1 &
+            SERVER=$!
+            sleep 3
+            godot --headless --path game -- --nettest --port $port --name Alice --expect $exp > alice_$exp.log 2>&1 &
+            ALICE=$!
+            godot --headless --path game -- --nettest --port $port --name Bob --expect $exp > bob_$exp.log 2>&1
+            BOB_RC=$?
+            wait $ALICE; ALICE_RC=$?
+            kill $SERVER
+            for f in server_$exp alice_$exp bob_$exp; do echo "===== $f"; grep -vE "fontconfig|os_linuxbsd" $f.log | tail -25; done
+            if grep -qE "SCRIPT ERROR|Invalid (call|access|assignment)" server_$exp.log alice_$exp.log bob_$exp.log; then fail=1; fi
+            grep -q "NETTEST Alice PASS" alice_$exp.log && grep -q "NETTEST Bob PASS" bob_$exp.log && [ $ALICE_RC -eq 0 ] && [ $BOB_RC -eq 0 ] || fail=1
+          done
+          exit $fail
 
       - name: Export debug APK
         run: |

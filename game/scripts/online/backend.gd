@@ -104,6 +104,9 @@ func pull_progress() -> void:
 		var local: float = Game.best_times.get(course, 0.0)
 		if t > 0.0 and (local <= 0.0 or t < local):
 			Game.best_times[course] = t
+	var scores: Dictionary = cloud.get("best_scores", {})
+	for board: String in scores:
+		Game.best_scores[board] = maxi(int(Game.best_scores.get(board, 0)), int(scores[board]))
 	Game.save_profile()
 
 
@@ -115,6 +118,7 @@ func push_progress() -> void:
 	await client.write_object("progress", "stats", {
 		"coins": Game.lifetime_coins,
 		"best_times": Game.best_times,
+		"best_scores": Game.best_scores,
 	})
 	await client.write_object("profile", "avatar", {
 		"shirt": Game.shirt_index, "pants": Game.pants_index, "skin": Game.skin_index,
@@ -140,20 +144,35 @@ func _on_course_completed(course_name: String, time_sec: float) -> void:
 	await push_progress()
 
 
-## Returns [{rank, name, time, mine}] for the top players of a course.
-func top_times(course_name: String, limit: int = 10) -> Array:
+## Submits a raw score (ms for courses, seconds/rounds/stages for modes).
+func submit(board: String, value: int) -> void:
+	_dirty = true
+	if online:
+		await client.submit_score(board, value)
+
+
+## Returns [{rank, name, score, mine}] for a leaderboard.
+func top_scores(board: String, limit: int = 10) -> Array:
 	if not online:
 		return []
-	var data := await client.list_records(board_id(course_name), limit)
+	var data := await client.list_records(board, limit)
 	var out: Array = []
 	for rec: Dictionary in data.get("records", []):
 		out.append({
 			"rank": int(rec.get("rank", 0)),
 			"name": str(rec.get("username", "?")),
-			"time": float(str(rec.get("score", "0"))) / 1000.0,
+			"score": int(str(rec.get("score", "0"))),
 			"mine": str(rec.get("owner_id", "")) == client.user_id,
 		})
 	return out
+
+
+## Course leaderboards in seconds: [{rank, name, time, mine}].
+func top_times(course_name: String, limit: int = 10) -> Array:
+	var rows: Array = await top_scores(board_id(course_name), limit)
+	for r: Dictionary in rows:
+		r["time"] = float(r["score"]) / 1000.0
+	return rows
 
 
 # ------------------------------------------------------------ friends ---
@@ -192,17 +211,27 @@ func remove_friend(id: String) -> Dictionary:
 
 # ------------------------------------------------------------ servers ---
 
-## Public game servers ("host:port"). Falls back to the backend host:7777.
-func game_servers() -> Array:
+## Public game servers for an experience ("host:port").
+## Server entries look like "island=host:7777" or "lava_rising=:7778"
+## (empty host = the account server's host). Plain "host:port" = island.
+func game_servers(exp_id: String = "island") -> Array:
 	var out: Array = []
+	var backend_host := Game.backend_url.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
 	if online:
 		var data := await client.rpc("server_list")
 		var list: Variant = data.get("servers", [])
 		if list is Array:
 			for s in list:
-				out.append(str(s))
-	if out.is_empty() and Game.backend_url != "":
-		var host := Game.backend_url.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
-		if host != "":
-			out.append("%s:%d" % [host, Network.DEFAULT_PORT])
+				var entry := str(s).strip_edges()
+				var eid := "island"
+				if entry.contains("="):
+					eid = entry.get_slice("=", 0).strip_edges()
+					entry = entry.get_slice("=", 1).strip_edges()
+				if eid != exp_id:
+					continue
+				if entry.begins_with(":"):
+					entry = backend_host + entry
+				out.append(entry)
+	if out.is_empty() and exp_id == "island" and backend_host != "":
+		out.append("%s:%d" % [backend_host, Network.DEFAULT_PORT])
 	return out

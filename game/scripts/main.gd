@@ -1,17 +1,21 @@
 extends Node3D
 ## Entry point.
-##   Normal:      main menu -> game (solo / host / join)
-##   --server:    dedicated headless server (also auto in "dedicated_server" exports)
-##   --selftest:  automated input test (CI)
-##   --nettest:   automated multiplayer test client (CI)
+##   Normal:        menu (Discover) -> experience (solo / host / join / online)
+##   --server:      dedicated headless server  [--experience id] [--port n]
+##   --selftest:    automated input test (CI)
+##   --modetest id: run an experience solo and check its round loop (CI)
+##   --nettest:     automated multiplayer test client (CI)
+##   --backendtest: Nakama integration test (CI)
 
-var world: World
+var experience: Experience
+var game_mode: GameMode
 var player: Player
 var avatar: Avatar
 var camera_rig: CameraRig
 var hud: Hud
 var menu: MainMenu
 
+var _menu_stage: Node3D
 var _menu_cam: Camera3D
 var _preview: Avatar
 var _menu_t: float = 0.0
@@ -38,24 +42,27 @@ func _ready() -> void:
 	if args.has("--name"):
 		Game.player_name = _arg(args, "--name", Game.player_name)
 	_build_environment()
-	world = World.new()
-	world.name = "World"
-	add_child(world)
-	Game.spawn_point = world.spawn_point
-	Game.checkpoint_position = world.spawn_point
 
-	Network.connection_succeeded.connect(_on_connection_succeeded)
 	Network.connection_failed.connect(_on_connection_failed)
 	Network.disconnected.connect(_on_disconnected)
+	Network.welcomed.connect(_on_welcomed)
 	Network.player_joined.connect(_on_player_joined)
 	Network.player_left.connect(_on_player_left)
 	Network.state_received.connect(_on_state_received)
+	Network.mode_event.connect(_on_network_mode_event)
 
 	if args.has("--selftest"):
-		_start_game()
+		_start_game("island")
 		var t: Node = load("res://scripts/debug/self_test.gd").new()
 		t.set("main", self)
 		add_child(t)
+	elif args.has("--modetest"):
+		var exp_id := _arg(args, "--modetest", "lava_rising")
+		_start_game(exp_id)
+		var mt: Node = load("res://scripts/debug/mode_test.gd").new()
+		mt.set("main", self)
+		mt.set("exp_id", exp_id)
+		add_child(mt)
 	elif args.has("--nettest"):
 		var port := int(_arg(args, "--port", str(Network.DEFAULT_PORT)))
 		Network.join("127.0.0.1", port)
@@ -75,24 +82,51 @@ func _arg(args: PackedStringArray, key: String, fallback: String) -> String:
 func _run_server(args: PackedStringArray) -> void:
 	Engine.max_fps = 60
 	var port := int(_arg(args, "--port", str(Network.DEFAULT_PORT)))
-	var err := Network.start_dedicated(port)
+	var exp_id := _arg(args, "--experience", Catalog.DEFAULT_ID)
+	if not Catalog.has(exp_id):
+		exp_id = Catalog.DEFAULT_ID
+	var err := Network.start_dedicated(port, exp_id)
 	if err != OK:
 		printerr("[server] failed to start on port %d (error %d)" % [port, err])
 		get_tree().quit(1)
+		return
+	_start_mode(exp_id)
+
+
+func _start_mode(exp_id: String) -> void:
+	game_mode = Catalog.create_mode(exp_id)
+	if game_mode == null:
+		Network.snapshot_provider = Callable()
+		return
+	game_mode.event.connect(_on_authority_event)
+	Network.snapshot_provider = game_mode.snapshot
+	add_child(game_mode)
+
+
+func _on_authority_event(ev: Dictionary, reliable: bool) -> void:
+	if experience != null:
+		experience.apply_event(ev)
+	Network.send_mode_event(ev, reliable)
+
+
+func _on_network_mode_event(ev: Dictionary) -> void:
+	if experience != null and Network.mode == "client":
+		experience.apply_event(ev)
 
 
 # --------------------------------------------------------------- menu ---
 
 func _show_menu() -> void:
+	_build_menu_stage()
 	menu = MainMenu.new()
 	add_child(menu)
 	menu.play_requested.connect(_on_play_requested)
 	menu.profile_changed.connect(_rebuild_preview)
 
 	_menu_cam = Camera3D.new()
-	_menu_cam.fov = 60
+	_menu_cam.fov = 55
 	_menu_cam.far = 1500
-	_menu_cam.h_offset = -1.7
+	_menu_cam.h_offset = -2.4
 	add_child(_menu_cam)
 	_menu_cam.make_current()
 	_rebuild_preview()
@@ -100,38 +134,71 @@ func _show_menu() -> void:
 		Backend.connect_backend()
 
 
+func _build_menu_stage() -> void:
+	_menu_stage = Node3D.new()
+	add_child(_menu_stage)
+	var b := WorldBuilder.new(_menu_stage)
+	b.box(Vector3(0, -1, 0), Vector3(40, 2, 40), World.GRASS, true, "ground")
+	b.box(Vector3(0, -3.5, 0), Vector3(36, 3, 36), World.DIRT, false, "plain")
+	b.box(Vector3(0, 0.1, 0), Vector3(6, 0.2, 6), World.STONE, false, "tiled")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for i in 10:
+		var a := TAU * i / 10.0
+		var p := Vector3(cos(a) * rng.randf_range(10, 16), 0, sin(a) * rng.randf_range(10, 16))
+		b.box(p + Vector3(0, 1.3, 0), Vector3(0.7, 2.6, 0.7), Color(0.45, 0.3, 0.18), false, "plain")
+		b.box(p + Vector3(0, 3.2, 0), Vector3(3.0, 1.8, 3.0), World.LEAVES, false, "plain")
+	for i in 6:
+		var a := TAU * i / 6.0 + 0.3
+		b.box(Vector3(cos(a) * 6.5, 0.6, sin(a) * 6.5), Vector3(1.2, 1.2, 1.2), World.PALETTE[i], false, "tiled",
+			Vector3(0, a, 0))
+	b.build()
+	var ocean := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(2000, 2000)
+	ocean.mesh = plane
+	ocean.position.y = -2.0
+	var water := StandardMaterial3D.new()
+	water.albedo_color = Color(0.16, 0.47, 0.82)
+	water.roughness = 0.06
+	water.metallic = 0.3
+	ocean.material_override = water
+	_menu_stage.add_child(ocean)
+
+
 func _rebuild_preview() -> void:
 	if _preview != null:
 		_preview.queue_free()
 	_preview = Avatar.new()
 	_preview.apply_profile(Game.profile())
-	_preview.position = Vector3(world.spawn_point.x, 0.1, world.spawn_point.z)
+	_preview.position = Vector3(0, 0.2, 0)
 	add_child(_preview)
 
 
-func _on_play_requested(mode: String, address: String) -> void:
+func _on_play_requested(exp_id: String, mode: String, address: String) -> void:
 	match mode:
 		"offline":
 			Network.leave()
-			_start_game()
+			Network.experience_id = exp_id
+			_start_game(exp_id)
 		"host":
+			Network.experience_id = exp_id
 			var err := Network.host()
 			if err != OK:
 				menu.show_status("Could not host a game (error %d). Is another game already hosting?" % err, true)
 				return
-			_start_game()
+			_start_game(exp_id)
 		"online":
 			menu.set_busy(true)
-			menu.show_status("Finding a game server...")
-			var servers: Array = await Backend.game_servers()
+			menu.show_status("Finding a %s server..." % Catalog.get_entry(exp_id)["title"])
+			var servers: Array = await Backend.game_servers(exp_id)
 			if menu == null:
 				return
 			if servers.is_empty():
 				menu.set_busy(false)
-				menu.show_status("No game servers available right now.", true)
+				menu.show_status("No online server for this game yet. Try SOLO or HOST.", true)
 				return
-			Game.server_address = str(servers[0])
-			_on_play_requested("client", Game.server_address)
+			_on_play_requested(exp_id, "client", str(servers[0]))
 		"client":
 			var parsed := Network.parse_address(address)
 			var err := Network.join(parsed[0], parsed[1])
@@ -149,13 +216,15 @@ func _on_connect_timeout() -> void:
 	Network.leave()
 	if menu != null:
 		menu.set_busy(false)
-		menu.show_status("Connection timed out. Check the IP and that both devices are on the same Wi-Fi.", true)
+		menu.show_status("Connection timed out. Check the address and that the server is running.", true)
 
 
-func _on_connection_succeeded() -> void:
+func _on_welcomed(exp_id: String, snapshot: Dictionary) -> void:
 	if _in_game:
 		return
-	_start_game()
+	_start_game(exp_id)
+	if not snapshot.is_empty() and experience != null:
+		experience.apply_event(snapshot)
 	if OS.get_cmdline_user_args().has("--nettest"):
 		var t: Node = load("res://scripts/debug/net_test.gd").new()
 		t.set("main", self)
@@ -174,34 +243,39 @@ func _on_connection_failed(reason: String) -> void:
 
 # --------------------------------------------------------------- game ---
 
-func _start_game() -> void:
+func _start_game(exp_id: String) -> void:
 	if _in_game:
 		return
 	_in_game = true
-	if menu != null:
-		menu.queue_free()
-		menu = null
-	if _menu_cam != null:
-		_menu_cam.queue_free()
-		_menu_cam = null
-	if _preview != null:
-		_preview.queue_free()
-		_preview = null
+	for n: Node in [menu, _menu_cam, _preview, _menu_stage]:
+		if n != null:
+			n.queue_free()
+	menu = null
+	_menu_cam = null
+	_preview = null
+	_menu_stage = null
 
-	var spawn := world.spawn_point
+	experience = Catalog.create(exp_id)
+	add_child(experience)
+	experience.setup()
+	Game.spawn_point = experience.spawn_point
+	Game.checkpoint_position = experience.spawn_point
+
+	var spawn := experience.spawn_point
 	if Network.is_online():
-		spawn += Vector3(randf_range(-4, 4), 0, randf_range(-1.5, 1.5))
+		spawn += Vector3(randf_range(-3, 3), 0, randf_range(-1.5, 1.5))
 
 	player = Player.new()
 	player.name = "Player"
 	player.position = spawn
-	world.add_child(player)
+	player.kill_height = experience.kill_height
+	experience.add_child(player)
 
 	avatar = Avatar.new()
 	avatar.name = "Avatar"
 	avatar.apply_profile(Game.profile())
 	avatar.rotation.y = PI
-	world.add_child(avatar)
+	experience.add_child(avatar)
 	player.avatar = avatar
 
 	camera_rig = CameraRig.new()
@@ -217,14 +291,23 @@ func _start_game() -> void:
 	hud.menu_pressed.connect(_back_to_menu)
 	hud.refresh_coins()
 
+	experience.player = player
+	experience.hud = hud
+	experience.status_changed.connect(hud.set_mode_status)
+	experience.on_player_ready(player)
+
+	if Network.mode == "offline" or Network.mode == "host":
+		_start_mode(exp_id)
+
+	var title: String = Catalog.get_entry(exp_id)["title"]
 	match Network.mode:
 		"host":
 			var ips := Network.local_addresses()
 			var ip_text := ", ".join(ips) if ips.size() > 0 else "this device"
-			hud.set_info("HOSTING - friends join with IP: %s" % ip_text)
-			hud.add_chat_line("You are hosting. Share your IP: %s" % ip_text, Color(0.6, 0.85, 1.0))
+			hud.set_info("HOSTING %s - friends join with IP: %s" % [title, ip_text])
+			hud.add_chat_line("You are hosting %s. Share your IP: %s" % [title, ip_text], Color(0.6, 0.85, 1.0))
 		"client":
-			hud.set_info("Online: %s" % Game.server_address)
+			hud.set_info("%s - online" % title)
 
 	for id: int in Network.players:
 		if id != Network.my_id():
@@ -242,17 +325,18 @@ func _go_home() -> void:
 	if player == null:
 		return
 	Game.reset_checkpoint_to_spawn()
-	player.teleport(world.spawn_point)
+	player.kill_height = experience.kill_height
+	player.teleport(experience.spawn_point)
 
 
 # ------------------------------------------------------------ network ---
 
 func _add_remote(id: int, info: Dictionary) -> void:
-	if _remotes.has(id) or world == null:
+	if _remotes.has(id) or experience == null:
 		return
 	var rp := RemotePlayer.new()
 	rp.name = "Remote_%d" % id
-	world.add_child(rp)
+	experience.add_child(rp)
 	rp.setup(id, info)
 	_remotes[id] = rp
 
@@ -283,7 +367,7 @@ func _on_disconnected() -> void:
 	_remotes.clear()
 	if hud != null:
 		hud.show_toast("DISCONNECTED", Color(1.0, 0.5, 0.4))
-		hud.add_chat_line("Lost connection - you are playing solo now.", Color(1.0, 0.7, 0.5))
+		hud.add_chat_line("Lost connection - press MENU to go back.", Color(1.0, 0.7, 0.5))
 		hud.set_info("")
 
 
@@ -293,21 +377,21 @@ func _process(delta: float) -> void:
 	if _menu_cam != null and _preview != null:
 		_menu_t += delta
 		var target := _preview.global_position + Vector3(0, 1.3, 0)
-		var ang := _menu_t * 0.18
-		_menu_cam.global_position = target + Vector3(sin(ang) * 6.0, 1.2, cos(ang) * 6.0)
+		var ang := _menu_t * 0.15
+		_menu_cam.global_position = target + Vector3(sin(ang) * 6.5, 1.4, cos(ang) * 6.5)
 		_menu_cam.look_at(target)
 		_preview.rotation.y = ang + PI * 0.15
 		_preview.animate(delta, 0.0, true, 0.0)
 
 	# CI smoke test: headless run without args opens the menu, then starts solo.
-	if _headless and not _smoke_done and world != null:
+	if _headless and not _smoke_done and not OS.get_cmdline_user_args().has("--nettest"):
 		_smoke_time += delta
 		if menu != null and _smoke_time > 1.0:
-			_on_play_requested("offline", "")
+			_on_play_requested(Catalog.DEFAULT_ID, "offline", "")
 		if _smoke_time >= 5.0 and player != null:
 			_smoke_done = true
-			print("SMOKE OK coins=%d boxes=%d on_floor=%s player=%s" % [
-				Game.total_coins, world.b.box_count, player.is_on_floor(),
+			print("SMOKE OK experience=%s coins=%d on_floor=%s player=%s" % [
+				experience.id, Game.total_coins, player.is_on_floor(),
 				player.global_position.snapped(Vector3.ONE * 0.01)])
 
 

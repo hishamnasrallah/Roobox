@@ -13,11 +13,18 @@ var _states: int = 0
 var _chats_from_others: int = 0
 var _max_players: int = 0
 var _max_remotes: int = 0
+var _mode_events: int = 0
+var _expect: String = "island"
 
 
 func _ready() -> void:
 	Network.state_received.connect(_on_state)
 	Network.chat_received.connect(_on_chat)
+	Network.mode_event.connect(func(_ev: Dictionary) -> void: _mode_events += 1)
+	var args := OS.get_cmdline_user_args()
+	var i := args.find("--expect")
+	if i >= 0 and i + 1 < args.size():
+		_expect = args[i + 1]
 	print("NETTEST %s connected as peer %d" % [Game.player_name, Network.my_id()])
 
 
@@ -44,8 +51,9 @@ func _process(delta: float) -> void:
 	if _t < DURATION:
 		return
 	set_process(false)
-	var ok := _max_players >= 1 and _states >= 20 and _chats_from_others >= 1 and _max_remotes >= 1
-	print("NETTEST %s %s players=%d states=%d chats=%d remotes=%d" % [
-		Game.player_name, "PASS" if ok else "FAIL", _max_players, _states,
-		_chats_from_others, _max_remotes])
+	var exp_ok := Network.experience_id == _expect and (_expect == "island" or _mode_events >= 2)
+	var ok := _max_players >= 1 and _states >= 20 and _chats_from_others >= 1 and _max_remotes >= 1 and exp_ok
+	print("NETTEST %s %s exp=%s players=%d states=%d chats=%d remotes=%d mode_events=%d" % [
+		Game.player_name, "PASS" if ok else "FAIL", Network.experience_id, _max_players, _states,
+		_chats_from_others, _max_remotes, _mode_events])
 	get_tree().quit(0 if ok else 1)

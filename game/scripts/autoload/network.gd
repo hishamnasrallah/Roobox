@@ -15,6 +15,10 @@ signal player_joined(id: int, info: Dictionary)
 signal player_left(id: int)
 signal state_received(id: int, pos: Vector3, yaw: float, vel: Vector3, flags: int)
 signal chat_received(id: int, sender: String, text: String)
+## Server told us which experience it runs (+ the current round snapshot).
+signal welcomed(experience_id: String, snapshot: Dictionary)
+## Round/state event from the authority's GameMode.
+signal mode_event(ev: Dictionary)
 
 const DEFAULT_PORT := 7777
 const MAX_PLAYERS := 32
@@ -22,6 +26,10 @@ const MAX_NAME := 16
 const MAX_CHAT := 120
 
 var mode: String = "offline"
+## Experience this session runs (set by host/server, received by clients).
+var experience_id: String = "island"
+## Returns the current GameMode snapshot for late joiners (set by main).
+var snapshot_provider: Callable = Callable()
 ## id -> {name, shirt, pants, skin}
 var players: Dictionary = {}
 
@@ -72,7 +80,8 @@ func host(port: int = DEFAULT_PORT) -> Error:
 	return OK
 
 
-func start_dedicated(port: int = DEFAULT_PORT) -> Error:
+func start_dedicated(port: int = DEFAULT_PORT, exp_id: String = "island") -> Error:
+	experience_id = exp_id
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, MAX_PLAYERS)
 	if err != OK:
@@ -80,7 +89,7 @@ func start_dedicated(port: int = DEFAULT_PORT) -> Error:
 	multiplayer.multiplayer_peer = peer
 	mode = "server"
 	players.clear()
-	print("[server] listening on UDP port %d (max %d players)" % [port, MAX_PLAYERS])
+	print("[server] %s listening on UDP port %d (max %d players)" % [experience_id, port, MAX_PLAYERS])
 	return OK
 
 
@@ -185,7 +194,37 @@ func _register(info: Dictionary) -> void:
 			_player_joined.rpc_id(pid, id, clean)
 	if mode == "host":
 		player_joined.emit(id, clean)
+	var snap: Dictionary = {}
+	if snapshot_provider.is_valid():
+		snap = snapshot_provider.call()
+	_welcome.rpc_id(id, experience_id, snap)
 	print("[net] %s joined as %d (%d players)" % [clean["name"], id, players.size()])
+
+
+@rpc("authority", "call_remote", "reliable")
+func _welcome(exp_id: String, snapshot: Dictionary) -> void:
+	experience_id = exp_id
+	welcomed.emit(exp_id, snapshot)
+
+
+## Authority -> everyone: a round/state event.
+func send_mode_event(ev: Dictionary, reliable: bool = true) -> void:
+	if not is_server():
+		return
+	if reliable:
+		_mode_event.rpc(ev)
+	else:
+		_mode_event_u.rpc(ev)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _mode_event(ev: Dictionary) -> void:
+	mode_event.emit(ev)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _mode_event_u(ev: Dictionary) -> void:
+	mode_event.emit(ev)
 
 
 @rpc("authority", "call_remote", "reliable")

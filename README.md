@@ -32,13 +32,25 @@ cp .env.example .env && nano .env          # غيّر كلمات السر
 docker compose --profile game up -d        # Nakama + Postgres + سيرفر اللعب
 ```
 
-افتح البورتات: **7350/tcp** (الحسابات) و **7777/udp** (اللعب).
+افتح البورتات: **7350/tcp** (الحسابات) و **7777-7780/udp** (سيرفر لكل لعبة).
 بالتطبيق: **SETTINGS** ← اكتب `http://IP-السيرفر:7350` ← **SAVE & CONNECT**. بعدها زر **PLAY ONLINE** بيدخلك عالسيرفر مباشرة.
 
 > صورة `roobox-server` على ghcr.io خاصة افتراضياً: إما `docker login ghcr.io` على السيرفر، أو خليها Public من صفحة Packages.
 
 لوحة إدارة Nakama (لاعبين، بيانات، أرقام قياسية) على بورت 7351 ومفتوحة بس محلياً:
 `ssh -L 7351:127.0.0.1:7351 user@السيرفر` وبعدين افتح `http://localhost:7351`.
+
+## الألعاب (Discover)
+
+| اللعبة | النوع | الفكرة |
+|---|---|---|
+| **Roobox Island** | استكشاف | جزيرة كبيرة: Obby Land، Sky Tower، Playground، متاهة، قرية |
+| **Lava Rising** | نجاة | اللافا بتطلع — تسلّق البرج وضل عايش أطول وقت |
+| **Color Drop** | حفلة | بيطلع لون — اركض لبلاطة من نفس اللون قبل ما يختفي الباقي |
+| **Obby Rush** | obby | مراحل لا نهائية مولّدة، كل مرحلة أصعب |
+
+كل لعبة: SOLO / PLAY ONLINE / HOST ON WI-FI / JOIN. بالألعاب الجماعية السيرفر (أو الـ Host) هو الحَكَم على توقيت الجولات.
+لإضافة لعبة جديدة: كلاس يورث `Experience` (العالم) + اختيارياً `GameMode` (منطق الجولات) + سطر بـ `Catalog.ENTRIES`.
 
 ## العالم
 
@@ -95,6 +107,7 @@ game/                      مشروع Godot
     debug/                 اختبارات CI الآلية
     fx/fx.gd               مواد + particles
     online/                Nakama REST client + خدمات الحساب
+    experiences/           الألعاب: Experience + GameMode + Catalog
 server/Dockerfile          صورة السيرفر المستقل
 backend/                   docker compose (Nakama + Postgres + game) + Lua modules
 docs/ROADMAP.md            خطة المراحل

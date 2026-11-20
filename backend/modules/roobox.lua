@@ -1,27 +1,31 @@
 -- Roobox server logic for Nakama (Lua runtime).
 local nk = require("nakama")
 
--- Course leaderboards: lowest time wins, scores are milliseconds.
-local COURSES = {
-  obby_land = { min_ms = 20000 },
-  sky_tower = { min_ms = 15000 },
+-- Leaderboards. Courses: lowest time wins (milliseconds).
+-- Round modes: highest wins (seconds survived / rounds / stages).
+local BOARDS = {
+  obby_land   = { sort = "asc",  min = 20000, max = 3600000 },
+  sky_tower   = { sort = "asc",  min = 15000, max = 3600000 },
+  lava_rising = { sort = "desc", min = 1,     max = 600 },
+  color_drop  = { sort = "desc", min = 1,     max = 100 },
+  obby_rush   = { sort = "desc", min = 1,     max = 100000 },
 }
 
-for id, _ in pairs(COURSES) do
-  local ok, err = pcall(nk.leaderboard_create, id, false, "asc", "best", nil, { course = id })
+for id, cfg in pairs(BOARDS) do
+  local ok, err = pcall(nk.leaderboard_create, id, false, cfg.sort, "best", nil, { board = id })
   if not ok then
     nk.logger_info(("leaderboard %s: %s"):format(id, tostring(err)))
   end
 end
 
--- Basic anti-cheat: reject impossible course times and unknown boards.
+-- Basic anti-cheat: reject impossible scores and unknown boards.
 local function before_write_record(context, payload)
-  local board = COURSES[payload.leaderboard_id]
+  local board = BOARDS[payload.leaderboard_id]
   if board == nil then
     return nil
   end
   local score = tonumber(payload.record.score) or 0
-  if score < board.min_ms or score > 3600000 then
+  if score < board.min or score > board.max then
     nk.logger_warn(("rejected score %s on %s from %s"):format(tostring(score), payload.leaderboard_id, context.user_id or "?"))
     return nil
   end

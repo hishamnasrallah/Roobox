@@ -34,6 +34,8 @@ var checkpoint_position: Vector3 = Vector3(0, 1, 0)
 var current_course: String = ""
 var course_time: float = 0.0
 var best_times: Dictionary = {}
+## Best scores of round-based experiences: board id -> int.
+var best_scores: Dictionary = {}
 
 ## Local player profile (also sent to other players online).
 var player_name: String = ""
@@ -86,6 +88,7 @@ func load_profile() -> void:
 		server_address = str(cfg.get_value("net", "address", "127.0.0.1"))
 		best_times = cfg.get_value("stats", "best_times", {}) as Dictionary
 		lifetime_coins = int(cfg.get_value("stats", "coins", 0))
+		best_scores = cfg.get_value("stats", "best_scores", {}) as Dictionary
 		backend_url = str(cfg.get_value("online", "backend_url", ""))
 		backend_key = str(cfg.get_value("online", "backend_key", "defaultkey"))
 		device_id = str(cfg.get_value("online", "device_id", ""))
@@ -108,6 +111,7 @@ func save_profile() -> void:
 	cfg.set_value("net", "address", server_address)
 	cfg.set_value("stats", "best_times", best_times)
 	cfg.set_value("stats", "coins", lifetime_coins)
+	cfg.set_value("stats", "best_scores", best_scores)
 	cfg.set_value("online", "backend_url", backend_url)
 	cfg.set_value("online", "backend_key", backend_key)
 	cfg.set_value("online", "device_id", device_id)

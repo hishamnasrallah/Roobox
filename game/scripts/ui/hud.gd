@@ -13,6 +13,7 @@ var touch: TouchControls
 var _coin_label: Label
 var _timer_label: Label
 var _info_label: Label
+var _mode_label: Label
 var _stats_label: Label
 var _toast: Label
 var _hint: Label
@@ -74,6 +75,15 @@ func _ready() -> void:
 	_timer_label.offset_top = 18
 	_timer_label.visible = false
 	root.add_child(_timer_label)
+
+	_mode_label = UiStyle.label(34)
+	_mode_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mode_label.offset_left = -520
+	_mode_label.offset_right = 520
+	_mode_label.offset_top = 96
+	_mode_label.visible = false
+	root.add_child(_mode_label)
 
 	_info_label = UiStyle.label(20, Color(0.75, 0.9, 1.0))
 	_info_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -199,6 +209,13 @@ func _format_time(t: float) -> String:
 	var m := int(t) / 60
 	var s := fmod(t, 60.0)
 	return "%02d:%04.1f" % [m, s]
+
+
+## Banner for round-based experiences (empty text hides it).
+func set_mode_status(text: String, color: Color = Color(1, 1, 1)) -> void:
+	_mode_label.visible = text != ""
+	_mode_label.text = text
+	_mode_label.label_settings.font_color = color
 
 
 func set_info(text: String) -> void:
