@@ -22,6 +22,24 @@
   وبعدين كل اللاعبين بيكتبوا IP السيرفر وبيضغطوا JOIN.
   (أو نزّل `roobox_server.x86_64` من إصدار dev-latest وشغّله: `./roobox_server.x86_64 --headless -- --server --port 7777`)
 
+## السيرفر الكامل (حسابات + أصدقاء + أرقام قياسية + سيرفر لعب)
+
+على أي VPS فيه Docker (مثلاً Ubuntu من Hetzner أو DigitalOcean):
+
+```bash
+git clone https://github.com/hishamnasrallah/Roobox.git && cd Roobox/backend
+cp .env.example .env && nano .env          # غيّر كلمات السر
+docker compose --profile game up -d        # Nakama + Postgres + سيرفر اللعب
+```
+
+افتح البورتات: **7350/tcp** (الحسابات) و **7777/udp** (اللعب).
+بالتطبيق: **SETTINGS** ← اكتب `http://IP-السيرفر:7350` ← **SAVE & CONNECT**. بعدها زر **PLAY ONLINE** بيدخلك عالسيرفر مباشرة.
+
+> صورة `roobox-server` على ghcr.io خاصة افتراضياً: إما `docker login ghcr.io` على السيرفر، أو خليها Public من صفحة Packages.
+
+لوحة إدارة Nakama (لاعبين، بيانات، أرقام قياسية) على بورت 7351 ومفتوحة بس محلياً:
+`ssh -L 7351:127.0.0.1:7351 user@السيرفر` وبعدين افتح `http://localhost:7351`.
+
 ## العالم
 
 جزيرة كبيرة فيها ساحة spawn و 4 بوابات:
@@ -52,6 +70,7 @@
 | العالم الكبير | `WorldBuilder`: آلاف البلوكات بتتجمّع بـ MultiMesh مقسّمة chunks → draw calls قليلة |
 | الملتي بلاير | ENet (UDP): Host على الـ Wi-Fi / سيرفر مستقل headless، interpolation للاعبين، شات |
 | الأصوات | مولّدة بالكود (procedural) — بدون ملفات صوت |
+| الحسابات | Nakama + Postgres: تسجيل بالجهاز، أصدقاء، حفظ سحابي، أرقام قياسية، anti-cheat بسيط |
 | CI | GitHub Actions: smoke test + اختبار لمس + اختبار ملتي بلاير (سيرفر + 2 لاعبين) + APK + Docker image للسيرفر |
 
 ## هيكل المشروع
@@ -75,7 +94,9 @@ game/                      مشروع Godot
     ui/                    القائمة الرئيسية، الواجهة، أزرار اللمس، الشات
     debug/                 اختبارات CI الآلية
     fx/fx.gd               مواد + particles
+    online/                Nakama REST client + خدمات الحساب
 server/Dockerfile          صورة السيرفر المستقل
+backend/                   docker compose (Nakama + Postgres + game) + Lua modules
 docs/ROADMAP.md            خطة المراحل
 ```
 
