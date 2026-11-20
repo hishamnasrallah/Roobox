@@ -12,6 +12,25 @@
    (أو من تبويب **Actions** ← آخر run ← Artifacts).
 2. افتح الملف على التلفون واسمح بـ "تثبيت تطبيقات غير معروفة".
 
+## اللعب مع الأصحاب
+
+- **على نفس الـ Wi-Fi:** تلفون واحد بيضغط **HOST GAME**، وبيطلعله الـ IP فوق الشاشة. الباقي بيكتبوا الـ IP وبيضغطوا **JOIN**.
+- **على الإنترنت:** شغّل السيرفر المستقل على أي VPS (لازم UDP بورت 7777 مفتوح):
+  ```bash
+  docker run -d --restart unless-stopped -p 7777:7777/udp ghcr.io/hishamnasrallah/roobox-server:latest
+  ```
+  وبعدين كل اللاعبين بيكتبوا IP السيرفر وبيضغطوا JOIN.
+  (أو نزّل `roobox_server.x86_64` من إصدار dev-latest وشغّله: `./roobox_server.x86_64 --headless -- --server --port 7777`)
+
+## العالم
+
+جزيرة كبيرة فيها ساحة spawn و 4 بوابات:
+- **OBBY LAND** (شمال): مسار عوائق فوق البحر — منصات متحركة، عمود دوّار، قافزة، لافا، برج حلزوني.
+- **SKY TOWER** (شرق): برج 60 متر، checkpoint كل 15 متر.
+- **PLAYGROUND** (غرب): trampolines، هرم، منحدر وزحليقة، متاهة.
+- **VILLAGE** (جنوب): بيوت بتقدر تدخلها وتطلع على سطوحها، بحيرة وجسر.
+- غابات وتلال وعملات بكل مكان. زر **HOME** بيرجعك عالساحة.
+
 ## التحكم
 
 | أندرويد | كمبيوتر |
@@ -30,7 +49,10 @@
 | الشخصية | `CharacterBody3D`: coyote time، jump buffer، قفزة متغيرة، منصات متحركة |
 | الأنيميشن | أنيميشن إجرائي (procedural): idle/walk/run/jump/fall + squash & stretch + ميلان |
 | الرسوم | PBR، ظلال ناعمة، glow، fog، tonemapping، كل شي procedural (APK صغير) |
-| CI | GitHub Actions + `barichello/godot-ci` → smoke test + APK |
+| العالم الكبير | `WorldBuilder`: آلاف البلوكات بتتجمّع بـ MultiMesh مقسّمة chunks → draw calls قليلة |
+| الملتي بلاير | ENet (UDP): Host على الـ Wi-Fi / سيرفر مستقل headless، interpolation للاعبين، شات |
+| الأصوات | مولّدة بالكود (procedural) — بدون ملفات صوت |
+| CI | GitHub Actions: smoke test + اختبار لمس + اختبار ملتي بلاير (سيرفر + 2 لاعبين) + APK + Docker image للسيرفر |
 
 ## هيكل المشروع
 
@@ -40,13 +62,20 @@ game/                      مشروع Godot
   export_presets.cfg       إعدادات تصدير أندرويد
   scenes/main.tscn
   scripts/
-    autoload/game.gd       حالة اللعبة + توحيد الإدخال (لمس/كيبورد/يد تحكم)
+    autoload/game.gd       حالة اللعبة + البروفايل + توحيد الإدخال
+    autoload/network.gd    الملتي بلاير (host / join / dedicated server)
+    autoload/sfx.gd        الأصوات المولّدة
+    world/world.gd         العالم كامل (الجزيرة والمناطق)
+    world/world_builder.gd تجميع البلوكات لأداء عالي
     player/player.gd       الفيزياء والحركة
     player/avatar.gd       الشخصية البلوكية + الأنيميشن
+    player/remote_player.gd اللاعبين التانيين (interpolation)
     camera/camera_rig.gd   كاميرا third-person مع تفادي الجدران
     level/                 عناصر المرحلة (منصات، عملات، checkpoints، ...)
-    ui/                    الواجهة وأزرار اللمس
+    ui/                    القائمة الرئيسية، الواجهة، أزرار اللمس، الشات
+    debug/                 اختبارات CI الآلية
     fx/fx.gd               مواد + particles
+server/Dockerfile          صورة السيرفر المستقل
 docs/ROADMAP.md            خطة المراحل
 ```
 

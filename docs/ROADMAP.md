@@ -8,11 +8,18 @@
 - [x] مرحلة obby كاملة: منصات متحركة، عمود دوّار، jump pad، لافا، kill bricks، checkpoints، عملات، نهاية
 - [x] CI: smoke test + APK تلقائي + إصدار dev-latest
 
-## المرحلة 2 — الملتي بلاير
-- [ ] سيرفر Godot headless (نفس الكود) — server-authoritative
-- [ ] ENet/WebSocket، client prediction + reconciliation + interpolation
-- [ ] أسماء فوق الراس، شات، emotes
-- [ ] Docker image للسيرفر
+## المرحلة 1.5 — عالم كبير + شكل وأصوات (✅)
+- [x] جزيرة كبيرة + 4 مناطق + بوابات + زر HOME
+- [x] MultiMesh batching للأداء
+- [x] أصوات procedural، مواد بلاستيك، قائمة رئيسية وتخصيص ألوان
+
+## المرحلة 2 — الملتي بلاير (✅ النسخة الأولى)
+- [x] سيرفر Godot headless (نفس الكود) + Docker image
+- [x] Host على الـ Wi-Fi / Join بالـ IP
+- [x] interpolation للاعبين التانيين، أسماء فوق الراس، شات
+- [ ] تحقق أقوى على السيرفر (anti-cheat للسرعة/التليبورت)
+- [ ] emotes، قائمة لاعبين، تصادم بين اللاعبين
+- [ ] سيرفرات متعددة + matchmaking
 
 ## المرحلة 3 — الحسابات والمنصة
 - [ ] Nakama (حسابات، أصدقاء، matchmaking، تخزين)
