@@ -20,18 +20,27 @@ var _touch_pos: Dictionary = {}
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# NOTE: must also reset offsets; plain set_anchors_preset() inside the tree
+	# keeps the old (zero) size, which made the controls dead on device.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
 	resized.connect(queue_redraw)
 
 
+func _screen() -> Vector2:
+	if size.x > 1.0 and size.y > 1.0:
+		return size
+	return get_viewport_rect().size
+
+
 func _jump_center() -> Vector2:
-	return Vector2(size.x - 175.0, size.y - 175.0)
+	var s := _screen()
+	return Vector2(s.x - 175.0, s.y - 175.0)
 
 
 func _joy_home() -> Vector2:
-	return Vector2(200.0, size.y - 190.0)
+	return Vector2(200.0, _screen().y - 190.0)
 
 
 func release_all() -> void:
@@ -61,7 +70,7 @@ func _on_touch(t: InputEventScreenTouch) -> void:
 			_jump_index = t.index
 			Game.touch_jump_held = true
 			Game.press_jump()
-		elif _joy_index == -1 and t.position.x < size.x * 0.45:
+		elif _joy_index == -1 and t.position.x < _screen().x * 0.45:
 			_joy_index = t.index
 			_joy_center = t.position
 			_joy_knob = t.position
