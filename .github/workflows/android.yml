@@ -31,6 +31,7 @@ jobs:
       - name: Compile-check every script (detailed errors)
         shell: bash
         run: |
+          set +e +o pipefail
           fail=0
           for f in $(cd game && find scripts -name '*.gd' | sort); do
             out=$(godot --headless --path game --check-only --script "res://$f" 2>&1 | grep -E "SCRIPT ERROR|Parse Error|ERROR: .*res://" -A2 | grep -v "does not inherit from")
