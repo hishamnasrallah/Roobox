@@ -3,6 +3,8 @@ extends Area3D
 ## Respawn point. Turns green (and waves its flag) when reached.
 
 @export var index: int = 1
+## If set, touching this checkpoint (re)starts the named course timer.
+@export var course_name: String = ""
 
 var _pad_mat: StandardMaterial3D
 var _flag: MeshInstance3D
@@ -53,8 +55,6 @@ func _ready() -> void:
 	shape.position.y = 1.5
 	add_child(shape)
 
-	if index == 0:
-		_set_active(false)
 	body_entered.connect(_on_body_entered)
 
 
@@ -65,10 +65,16 @@ func _process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if _active or not (body is Player):
+	if not (body is Player):
 		return
-	Game.set_checkpoint(index, global_position + Vector3(0, 0.6, 0))
-	_set_active(true)
+	if course_name != "":
+		Game.start_course(course_name)
+	var spot := global_position + Vector3(0, 0.6, 0)
+	if Game.checkpoint_position.distance_to(spot) > 0.5:
+		Game.set_checkpoint(spot)
+		_set_active(not _active)
+	elif not _active:
+		_set_active(false)
 
 
 func _set_active(celebrate: bool) -> void:

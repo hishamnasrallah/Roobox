@@ -18,7 +18,7 @@ signal landed(impact_speed: float)
 @export var jump_cut: float = 0.5
 @export var coyote_time: float = 0.12
 @export var turn_speed: float = 14.0
-@export var kill_height: float = -22.0
+@export var kill_height: float = -7.0
 
 var avatar: Avatar = null
 var camera_rig: CameraRig = null
@@ -30,6 +30,9 @@ var _jumping: bool = false
 var _control_lock: float = 0.0
 var _dead: bool = false
 var _target_yaw: float = PI
+var _net_timer: float = 0.0
+
+const NET_RATE := 1.0 / 20.0
 
 
 func _ready() -> void:
@@ -94,6 +97,7 @@ func _physics_process(delta: float) -> void:
 		_coyote = 0.0
 		_jumping = true
 		jumped.emit()
+		Sfx.play("jump", -4.0)
 		if avatar != null:
 			avatar.on_jump()
 		Fx.burst(get_parent(), global_position + Vector3(0, 0.1, 0), Color(1, 1, 1, 0.9), 8, 3.0, 0.14, 0.4, -4.0, false, 70.0)
@@ -112,6 +116,8 @@ func _physics_process(delta: float) -> void:
 		landed.emit(impact)
 		if avatar != null and impact > 3.0:
 			avatar.on_land(impact)
+		if impact > 9.0:
+			Sfx.play("land", -6.0)
 		if impact > 14.0:
 			Fx.burst(get_parent(), global_position + Vector3(0, 0.1, 0), Color(1, 1, 1, 0.9), 12, 4.0, 0.16, 0.45, -6.0, false, 80.0)
 	_was_on_floor = now_on_floor
@@ -121,6 +127,13 @@ func _physics_process(delta: float) -> void:
 
 	if global_position.y < kill_height:
 		Game.kill_player()
+
+	_net_timer += delta
+	if _net_timer >= NET_RATE and Network.is_online():
+		_net_timer = 0.0
+		var flags := (1 if is_on_floor() else 0) | (2 if _dead else 0)
+		var yaw := avatar.rotation.y if avatar != null else _target_yaw
+		Network.send_state(global_position, yaw, get_real_velocity(), flags)
 
 
 func _process(delta: float) -> void:
@@ -157,11 +170,29 @@ func launch(strength: float) -> void:
 		avatar.on_jump()
 
 
+## Instantly move the player (portals, home button).
+func teleport(pos: Vector3) -> void:
+	Sfx.play("teleport")
+	Fx.burst(get_parent(), global_position + Vector3(0, 1, 0), Color(0.6, 0.85, 1.0), 16, 5.0, 0.15, 0.6, -2.0)
+	global_position = pos
+	velocity = Vector3.ZERO
+	_control_lock = 0.0
+	reset_physics_interpolation()
+	if avatar != null:
+		avatar.global_position = pos
+		avatar.on_land(10.0)
+	Fx.burst(get_parent(), pos + Vector3(0, 1, 0), Color(0.6, 0.85, 1.0), 16, 5.0, 0.15, 0.6, -2.0)
+	Game.notify_respawned()
+
+
 func _on_died() -> void:
 	if _dead:
 		return
 	_dead = true
 	velocity = Vector3.ZERO
+	Sfx.play("die")
+	if Network.is_online():
+		Network.send_state(global_position, _target_yaw, Vector3.ZERO, 2)
 	var poof_pos := global_position + Vector3(0, 1.0, 0)
 	if avatar != null:
 		Fx.burst(get_parent(), poof_pos, avatar.shirt_color, 22, 7.0, 0.22, 0.9, -14.0)

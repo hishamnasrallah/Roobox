@@ -1,14 +1,23 @@
 class_name Hud
 extends CanvasLayer
-## In-game HUD: coins, timer, FPS, toasts, respawn fade, win screen.
+## In-game HUD: coins, course timer, chat, home button, player count,
+## toasts, respawn fade and the course-complete panel.
+
+signal home_pressed
+
+const CHAT_LINES := 7
+const CHAT_TTL := 14.0
 
 var touch: TouchControls
 var _coin_label: Label
-var _time_label: Label
-var _fps_label: Label
+var _timer_label: Label
+var _info_label: Label
+var _stats_label: Label
 var _toast: Label
 var _hint: Label
 var _fade: ColorRect
+var _chat_log: VBoxContainer
+var _chat_edit: LineEdit
 var _win_panel: PanelContainer
 var _win_stats: Label
 
@@ -18,6 +27,7 @@ class CoinIcon:
 
 	func _ready() -> void:
 		custom_minimum_size = Vector2(40, 40)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
 		var c := size * 0.5
@@ -29,7 +39,7 @@ class CoinIcon:
 func _ready() -> void:
 	layer = 10
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
@@ -38,64 +48,112 @@ func _ready() -> void:
 
 	# --- Coins (top-left) ---
 	var coin_box := HBoxContainer.new()
-	coin_box.position = Vector2(28, 22)
+	coin_box.position = Vector2(28, 20)
 	coin_box.add_theme_constant_override("separation", 10)
 	coin_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(coin_box)
 	coin_box.add_child(CoinIcon.new())
-	_coin_label = _label(36)
+	_coin_label = UiStyle.label(34)
 	coin_box.add_child(_coin_label)
 
-	# --- Timer (top-center) ---
-	_time_label = _label(36)
-	_time_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_time_label.offset_left = -150
-	_time_label.offset_right = 150
-	_time_label.offset_top = 22
-	root.add_child(_time_label)
+	# --- Chat log (under coins) ---
+	_chat_log = VBoxContainer.new()
+	_chat_log.position = Vector2(28, 76)
+	_chat_log.custom_minimum_size = Vector2(560, 0)
+	_chat_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chat_log.add_theme_constant_override("separation", 2)
+	root.add_child(_chat_log)
 
-	# --- FPS (top-right) ---
-	_fps_label = _label(20)
-	_fps_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_fps_label.offset_left = -160
-	_fps_label.offset_right = -24
-	_fps_label.offset_top = 24
-	_fps_label.modulate = Color(1, 1, 1, 0.7)
-	root.add_child(_fps_label)
+	# --- Course timer + info (top-center) ---
+	_timer_label = UiStyle.label(38, Color(1.0, 0.9, 0.4))
+	_timer_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timer_label.offset_left = -260
+	_timer_label.offset_right = 260
+	_timer_label.offset_top = 18
+	_timer_label.visible = false
+	root.add_child(_timer_label)
+
+	_info_label = UiStyle.label(20, Color(0.75, 0.9, 1.0))
+	_info_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_info_label.offset_left = -360
+	_info_label.offset_right = 360
+	_info_label.offset_top = 70
+	root.add_child(_info_label)
+
+	# --- Buttons (top-right) ---
+	var btn_row := HBoxContainer.new()
+	btn_row.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	btn_row.offset_left = -330
+	btn_row.offset_right = -24
+	btn_row.offset_top = 16
+	btn_row.offset_bottom = 80
+	btn_row.alignment = BoxContainer.ALIGNMENT_END
+	btn_row.add_theme_constant_override("separation", 10)
+	root.add_child(btn_row)
+	var chat_btn := UiStyle.button("CHAT", Color(0.25, 0.5, 0.95), 24, 60)
+	chat_btn.custom_minimum_size.x = 120
+	chat_btn.pressed.connect(open_chat)
+	btn_row.add_child(chat_btn)
+	var home_btn := UiStyle.button("HOME", Color(0.95, 0.5, 0.2), 24, 60)
+	home_btn.custom_minimum_size.x = 120
+	home_btn.pressed.connect(func() -> void: home_pressed.emit())
+	btn_row.add_child(home_btn)
+
+	_stats_label = UiStyle.label(18)
+	_stats_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_stats_label.offset_left = -330
+	_stats_label.offset_right = -26
+	_stats_label.offset_top = 84
+	_stats_label.modulate = Color(1, 1, 1, 0.75)
+	root.add_child(_stats_label)
+
+	# --- Chat input ---
+	_chat_edit = UiStyle.line_edit("Say something...", 26)
+	_chat_edit.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_chat_edit.offset_left = -320
+	_chat_edit.offset_right = 320
+	_chat_edit.offset_top = 100
+	_chat_edit.offset_bottom = 162
+	_chat_edit.max_length = Network.MAX_CHAT
+	_chat_edit.visible = false
+	_chat_edit.text_submitted.connect(_on_chat_submitted)
+	_chat_edit.focus_exited.connect(close_chat)
+	root.add_child(_chat_edit)
 
 	# --- Toast (center) ---
-	_toast = _label(64)
-	_toast.set_anchors_preset(Control.PRESET_CENTER)
+	_toast = UiStyle.label(64)
+	_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast.offset_left = -400
-	_toast.offset_right = 400
-	_toast.offset_top = -180
-	_toast.offset_bottom = -100
-	_toast.pivot_offset = Vector2(400, 40)
+	_toast.offset_left = -500
+	_toast.offset_right = 500
+	_toast.offset_top = -190
+	_toast.offset_bottom = -110
+	_toast.pivot_offset = Vector2(500, 40)
 	_toast.modulate.a = 0.0
 	root.add_child(_toast)
 
 	# --- Controls hint (desktop) ---
-	_hint = _label(22)
-	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hint = UiStyle.label(22)
+	_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.offset_left = -500
-	_hint.offset_right = 500
+	_hint.offset_left = -520
+	_hint.offset_right = 520
 	_hint.offset_top = -60
 	_hint.offset_bottom = -24
-	_hint.text = "WASD / Arrows: move   ·   Space: jump   ·   Drag mouse: camera   ·   Wheel: zoom"
+	_hint.text = "WASD: move   ·   Space: jump   ·   Drag mouse: camera   ·   Wheel: zoom   ·   Enter: chat"
 	_hint.visible = not touch.visible
 	root.add_child(_hint)
 	if _hint.visible:
 		var tw := create_tween()
-		tw.tween_interval(7.0)
+		tw.tween_interval(8.0)
 		tw.tween_property(_hint, "modulate:a", 0.0, 1.0)
 
 	# --- Fade overlay ---
 	_fade = ColorRect.new()
-	_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_fade.color = Color(1, 1, 1, 0)
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_fade)
@@ -106,35 +164,40 @@ func _ready() -> void:
 	Game.checkpoint_reached.connect(_on_checkpoint)
 	Game.player_died.connect(_on_player_died)
 	Game.player_respawned.connect(_on_player_respawned)
-	Game.level_completed.connect(_on_level_completed)
-	_on_coins_changed(Game.coins)
-	show_toast("GO!", Color(0.5, 1.0, 0.55))
+	Game.course_started.connect(_on_course_started)
+	Game.course_completed.connect(_on_course_completed)
+	Network.chat_received.connect(_on_chat_received)
+	Network.player_joined.connect(_on_player_joined)
+	Network.player_left.connect(_on_player_left)
+	refresh_coins()
 
 
 func _process(_delta: float) -> void:
-	_time_label.text = _format_time(Game.run_time)
-	_fps_label.text = "%d FPS" % Engine.get_frames_per_second()
+	_timer_label.visible = Game.current_course != ""
+	if _timer_label.visible:
+		_timer_label.text = "%s  %s" % [Game.current_course, _format_time(Game.course_time)]
+	var online := ""
+	if Network.is_online():
+		online = "   ·   %d online" % (Network.players.size() + (0 if Network.mode == "host" else 1))
+	_stats_label.text = "%d FPS%s" % [Engine.get_frames_per_second(), online]
 
 
-func _label(font_size: int) -> Label:
-	var l := Label.new()
-	var ls := LabelSettings.new()
-	ls.font_size = font_size
-	ls.font_color = Color(1, 1, 1)
-	ls.outline_size = maxi(4, font_size / 5)
-	ls.outline_color = Color(0.07, 0.08, 0.16)
-	ls.shadow_size = 2
-	ls.shadow_color = Color(0, 0, 0, 0.35)
-	ls.shadow_offset = Vector2(0, 3)
-	l.label_settings = ls
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return l
+func _unhandled_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k != null and k.pressed and not k.echo:
+		if k.keycode == KEY_ENTER and not _chat_edit.visible:
+			open_chat()
+			get_viewport().set_input_as_handled()
 
 
 func _format_time(t: float) -> String:
 	var m := int(t) / 60
 	var s := fmod(t, 60.0)
 	return "%02d:%04.1f" % [m, s]
+
+
+func set_info(text: String) -> void:
+	_info_label.text = text
 
 
 func show_toast(text: String, color: Color = Color(1, 1, 1)) -> void:
@@ -144,24 +207,82 @@ func show_toast(text: String, color: Color = Color(1, 1, 1)) -> void:
 	_toast.modulate.a = 1.0
 	var tw := create_tween()
 	tw.tween_property(_toast, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(0.9)
+	tw.tween_interval(1.0)
 	tw.tween_property(_toast, "modulate:a", 0.0, 0.4)
-
-
-func _on_coins_changed(total: int) -> void:
-	_coin_label.text = "%d / %d" % [total, Game.total_coins]
-	_coin_label.pivot_offset = _coin_label.size * 0.5
-	var tw := create_tween()
-	tw.tween_property(_coin_label, "scale", Vector2(1.25, 1.25), 0.07)
-	tw.tween_property(_coin_label, "scale", Vector2.ONE, 0.15)
 
 
 func refresh_coins() -> void:
 	_coin_label.text = "%d / %d" % [Game.coins, Game.total_coins]
 
 
-func _on_checkpoint(_index: int) -> void:
+# ------------------------------------------------------------------ chat ---
+
+func open_chat() -> void:
+	_chat_edit.visible = true
+	_chat_edit.text = ""
+	_chat_edit.grab_focus()
+	Game.input_blocked = true
+	touch.release_all()
+
+
+func close_chat() -> void:
+	_chat_edit.visible = false
+	_chat_edit.release_focus()
+	Game.input_blocked = false
+
+
+func _on_chat_submitted(text: String) -> void:
+	if text.strip_edges() != "":
+		Network.send_chat(text)
+	close_chat()
+
+
+func add_chat_line(text: String, color: Color = Color(1, 1, 1)) -> void:
+	var l := UiStyle.label(22, color)
+	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(560, 0)
+	_chat_log.add_child(l)
+	while _chat_log.get_child_count() > CHAT_LINES:
+		var old := _chat_log.get_child(0)
+		_chat_log.remove_child(old)
+		old.queue_free()
+	var tw := l.create_tween()
+	tw.tween_interval(CHAT_TTL)
+	tw.tween_property(l, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(l.queue_free)
+
+
+func _on_chat_received(_id: int, sender: String, text: String) -> void:
+	add_chat_line("%s: %s" % [sender, text])
+	Sfx.play("pop", -4.0)
+
+
+func _on_player_joined(_id: int, info: Dictionary) -> void:
+	add_chat_line("%s joined the game" % info.get("name", "Someone"), Color(0.55, 1.0, 0.6))
+	Sfx.play("join", -2.0)
+
+
+func _on_player_left(id: int) -> void:
+	add_chat_line("Player %d left" % id, Color(1.0, 0.7, 0.5))
+
+
+# ---------------------------------------------------------------- events ---
+
+func _on_coins_changed(_total: int) -> void:
+	refresh_coins()
+	_coin_label.pivot_offset = _coin_label.size * 0.5
+	var tw := create_tween()
+	tw.tween_property(_coin_label, "scale", Vector2(1.25, 1.25), 0.07)
+	tw.tween_property(_coin_label, "scale", Vector2.ONE, 0.15)
+
+
+func _on_checkpoint() -> void:
 	show_toast("CHECKPOINT!", Color(0.45, 1.0, 0.6))
+
+
+func _on_course_started(course_name: String) -> void:
+	show_toast(course_name.to_upper() + " - GO!", Color(1.0, 0.85, 0.3))
 
 
 func _on_player_died() -> void:
@@ -175,11 +296,10 @@ func _on_player_respawned() -> void:
 	tw.tween_property(_fade, "color:a", 0.0, 0.35)
 
 
-func _on_level_completed(time_sec: float, coins: int) -> void:
-	touch.release_all()
-	touch.visible = false
+func _on_course_completed(course_name: String, time_sec: float) -> void:
 	show_toast("YOU WIN!", Color(1.0, 0.85, 0.2))
-	_win_stats.text = "Time  %s\nCoins  %d / %d" % [_format_time(time_sec), coins, Game.total_coins]
+	var best: float = Game.best_times.get(course_name, time_sec)
+	_win_stats.text = "%s\nTime  %s\nBest  %s" % [course_name, _format_time(time_sec), _format_time(best)]
 	_win_panel.visible = true
 	_win_panel.modulate.a = 0.0
 	_win_panel.scale = Vector2(0.8, 0.8)
@@ -190,56 +310,46 @@ func _on_level_completed(time_sec: float, coins: int) -> void:
 
 func _build_win_panel(root: Control) -> void:
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(center)
 
 	_win_panel = PanelContainer.new()
 	_win_panel.visible = false
-	_win_panel.custom_minimum_size = Vector2(460, 0)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.1, 0.2, 0.88)
-	sb.set_corner_radius_all(28)
-	sb.set_content_margin_all(32)
-	sb.border_color = Color(1, 1, 1, 0.15)
-	sb.set_border_width_all(3)
-	_win_panel.add_theme_stylebox_override("panel", sb)
+	_win_panel.custom_minimum_size = Vector2(500, 0)
+	_win_panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
 	center.add_child(_win_panel)
-	_win_panel.resized.connect(func() -> void: _win_panel.pivot_offset = _win_panel.size * 0.5)
+	_win_panel.resized.connect(_on_win_resized)
 
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 18)
+	vb.add_theme_constant_override("separation", 16)
 	_win_panel.add_child(vb)
 
-	var title := _label(58)
+	var title := UiStyle.label(56, Color(1.0, 0.85, 0.2))
 	title.text = "COURSE CLEAR!"
-	title.label_settings.font_color = Color(1.0, 0.85, 0.2)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(title)
 
-	_win_stats = _label(34)
+	_win_stats = UiStyle.label(32)
 	_win_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_win_stats)
 
-	var btn := Button.new()
-	btn.text = "PLAY AGAIN"
-	btn.custom_minimum_size = Vector2(0, 84)
-	btn.add_theme_font_size_override("font_size", 34)
-	btn.add_theme_color_override("font_color", Color(1, 1, 1))
-	btn.add_theme_stylebox_override("normal", _button_style(Color(0.2, 0.75, 0.35)))
-	btn.add_theme_stylebox_override("hover", _button_style(Color(0.25, 0.85, 0.42)))
-	btn.add_theme_stylebox_override("pressed", _button_style(Color(0.15, 0.6, 0.28)))
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	btn.pressed.connect(Game.restart)
-	vb.add_child(btn)
+	var home := UiStyle.button("BACK TO SPAWN", Color(0.2, 0.72, 0.35), 30, 76)
+	home.pressed.connect(_on_win_home)
+	vb.add_child(home)
+	var cont := UiStyle.button("KEEP EXPLORING", Color(0.3, 0.4, 0.6), 26, 64)
+	cont.pressed.connect(_hide_win)
+	vb.add_child(cont)
 
 
-func _button_style(c: Color) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = c
-	sb.set_corner_radius_all(20)
-	sb.set_content_margin_all(12)
-	sb.shadow_color = Color(0, 0, 0, 0.3)
-	sb.shadow_size = 6
-	sb.shadow_offset = Vector2(0, 4)
-	return sb
+func _on_win_resized() -> void:
+	_win_panel.pivot_offset = _win_panel.size * 0.5
+
+
+func _on_win_home() -> void:
+	_hide_win()
+	home_pressed.emit()
+
+
+func _hide_win() -> void:
+	_win_panel.visible = false

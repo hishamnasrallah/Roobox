@@ -10,7 +10,7 @@ env:
 
 jobs:
   build:
-    name: Smoke test + export APK
+    name: Tests + export APK + server
     runs-on: ubuntu-24.04
     container:
       image: barichello/godot-ci:4.7.2
@@ -28,7 +28,7 @@ jobs:
       - name: Import project
         run: godot --headless --path game --import 2>&1 | tee import.log
 
-      - name: Smoke test (run the game headless for 10 simulated seconds)
+      - name: Smoke test (menu -> solo game)
         run: |
           godot --headless --path game --fixed-fps 60 --quit-after 600 2>&1 | tee smoke.log
           if grep -nE "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|access|assignment)" import.log smoke.log; then
@@ -40,7 +40,25 @@ jobs:
       - name: Input self-test (simulated touch + keyboard)
         run: |
           godot --headless --path game --fixed-fps 60 --quit-after 1800 -- --selftest 2>&1 | tee selftest.log
+          if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" selftest.log; then exit 1; fi
           grep -q "SELFTEST PASS" selftest.log || { echo "::error::Input self-test failed"; exit 1; }
+
+      - name: Multiplayer test (dedicated server + 2 clients)
+        shell: bash
+        run: |
+          set +e
+          godot --headless --path game -- --server --port 7788 > server.log 2>&1 &
+          SERVER=$!
+          sleep 3
+          godot --headless --path game -- --nettest --port 7788 --name Alice > alice.log 2>&1 &
+          ALICE=$!
+          godot --headless --path game -- --nettest --port 7788 --name Bob > bob.log 2>&1
+          BOB_RC=$?
+          wait $ALICE; ALICE_RC=$?
+          kill $SERVER
+          for f in server alice bob; do echo "===== $f"; grep -vE "fontconfig|os_linuxbsd" $f.log; done
+          if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" server.log alice.log bob.log; then exit 1; fi
+          grep -q "NETTEST Alice PASS" alice.log && grep -q "NETTEST Bob PASS" bob.log && [ $ALICE_RC -eq 0 ] && [ $BOB_RC -eq 0 ]
 
       - name: Export debug APK
         run: |
@@ -49,11 +67,25 @@ jobs:
           ls -la build/android
           test -s build/android/roobox-debug.apk
 
+      - name: Export dedicated server (Linux)
+        run: |
+          mkdir -p build/server
+          godot --headless --path game --export-release "Linux Server" "$GITHUB_WORKSPACE/build/server/roobox_server.x86_64"
+          ls -la build/server
+          test -s build/server/roobox_server.x86_64
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: roobox-android-debug
           path: build/android/roobox-debug.apk
+          if-no-files-found: error
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roobox-server-linux
+          path: build/server/roobox_server.x86_64
           if-no-files-found: error
 
   publish:
@@ -70,14 +102,49 @@ jobs:
           name: roobox-android-debug
           path: apk
 
+      - name: Download server
+        uses: actions/download-artifact@v4
+        with:
+          name: roobox-server-linux
+          path: server
+
       - name: Replace dev-latest release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete dev-latest --cleanup-tag -y || true
-          gh release create dev-latest apk/roobox-debug.apk \
+          gh release create dev-latest apk/roobox-debug.apk server/roobox_server.x86_64 \
             --prerelease \
             --target "${{ github.sha }}" \
             --title "Roobox dev build #${{ github.run_number }}" \
-            --notes "Debug APK from branch \`${{ github.ref_name }}\` (commit ${{ github.sha }}). Install on Android: download, open, allow 'Install unknown apps'."
+            --notes "Debug APK from branch \`${{ github.ref_name }}\` (commit ${{ github.sha }}). Install on Android: download, open, allow 'Install unknown apps'. Dedicated server: roobox_server.x86_64 (Linux x86_64, UDP 7777)."
+
+  server-image:
+    name: Publish server Docker image (ghcr.io)
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download server
+        uses: actions/download-artifact@v4
+        with:
+          name: roobox-server-linux
+          path: server
+
+      - name: Build and push image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IMAGE=ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')-server
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker build -t "$IMAGE:latest" -t "$IMAGE:${{ github.sha }}" server
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          echo "Pushed $IMAGE:latest"

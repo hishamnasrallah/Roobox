@@ -63,8 +63,14 @@ func _input(event: InputEvent) -> void:
 		_on_drag(event as InputEventScreenDrag)
 
 
+## Top strip is reserved for HUD buttons (chat, home).
+const TOP_RESERVED := 120.0
+
+
 func _on_touch(t: InputEventScreenTouch) -> void:
 	if t.pressed:
+		if t.position.y < TOP_RESERVED:
+			return
 		_touch_pos[t.index] = t.position
 		if _jump_index == -1 and t.position.distance_to(_jump_center()) < JUMP_RADIUS * 1.3:
 			_jump_index = t.index

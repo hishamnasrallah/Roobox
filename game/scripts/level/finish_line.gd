@@ -2,9 +2,10 @@ class_name FinishLine
 extends Area3D
 ## Goal: golden trophy + arch. Celebrates with confetti.
 
+@export var course_name: String = "Course"
+
 var _trophy: Node3D
 var _t: float = 0.0
-var _done: bool = false
 
 
 func _ready() -> void:
@@ -83,10 +84,9 @@ func _process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if _done or not (body is Player):
+	if not (body is Player) or Game.current_course != course_name:
 		return
-	_done = true
-	Game.complete_level()
+	Game.complete_course(course_name)
 	for i in 4:
 		var offset := Vector3(randf_range(-3, 3), 3.0 + randf() * 2.0, randf_range(-3, 3))
 		Fx.burst(get_parent(), global_position + offset, Color(1, 0.3, 0.3), 40, 10.0, 0.18, 2.2, -7.0, true)

@@ -70,4 +70,5 @@ func _on_body_entered(body: Node3D) -> void:
 	var push := (tangent * 0.85 + radial.normalized() * 0.4).normalized() * push_strength
 	push.y = 7.5
 	player.knockback(push)
+	Sfx.play("hit")
 	Fx.burst(get_parent(), player.global_position + Vector3(0, 1, 0), Color(1, 0.4, 0.45), 10, 5.0, 0.15, 0.5)

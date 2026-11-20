@@ -40,7 +40,9 @@ func _run() -> void:
 		touch.visible, player.is_on_floor(), player.global_position])
 	_check(player.is_on_floor(), "player standing on spawn")
 
-	# --- Keyboard path ---
+	# --- Keyboard path (open grass, away from the fountain) ---
+	player.teleport(Vector3(30, 0.5, 30))
+	await _wait(0.6)
 	var start := player.global_position
 	Input.action_press("move_forward")
 	await _wait(1.0)
@@ -52,6 +54,8 @@ func _run() -> void:
 
 	# --- Touch joystick path (events go through the full engine pipeline) ---
 	touch.visible = true
+	player.teleport(Vector3(30, 0.5, 30))
+	await _wait(0.6)
 	var vis := vp.get_visible_rect().size
 	# Headless has no real window, so deliver events straight to the viewport
 	# in viewport coordinates (what the engine does after stretch transform).

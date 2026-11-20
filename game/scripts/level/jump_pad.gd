@@ -49,6 +49,7 @@ func _on_body_entered(body: Node3D) -> void:
 	if player == null:
 		return
 	player.launch(strength)
+	Sfx.play("boing", 0.0, clampf(22.0 / strength, 0.7, 1.4))
 	Fx.burst(get_parent(), global_position + Vector3(0, 0.5, 0), color, 18, 8.0, 0.16, 0.6, -10.0, false, 30.0)
 	var tw := create_tween()
 	tw.tween_property(_top, "scale", Vector3(1.2, 0.3, 1.2), 0.06)

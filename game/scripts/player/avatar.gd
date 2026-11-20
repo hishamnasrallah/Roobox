@@ -35,6 +35,16 @@ func _ready() -> void:
 	_build()
 
 
+## Set colors from a profile dictionary (call before adding to the tree).
+func apply_profile(info: Dictionary) -> void:
+	if info.get("shirt") is Color:
+		shirt_color = info["shirt"]
+	if info.get("pants") is Color:
+		pants_color = info["pants"]
+	if info.get("skin") is Color:
+		skin_color = info["skin"]
+
+
 func _build() -> void:
 	var skin := _mat(skin_color)
 	var shirt := _mat(shirt_color)
@@ -50,21 +60,21 @@ func _build() -> void:
 	_body.add_child(_hips)
 
 	# Legs (pivot at hip joint).
-	_leg_l = _limb(_hips, Vector3(-0.21, 0.0, 0.0), Vector3(0.38, 0.85, 0.4), pants)
-	_leg_r = _limb(_hips, Vector3(0.21, 0.0, 0.0), Vector3(0.38, 0.85, 0.4), pants)
+	_leg_l = _limb(_hips, Vector3(-0.21, 0.0, 0.0), Vector3(0.41, 0.86, 0.42), pants)
+	_leg_r = _limb(_hips, Vector3(0.21, 0.0, 0.0), Vector3(0.41, 0.86, 0.42), pants)
 	_box(_leg_l, Vector3(0, -0.78, -0.04), Vector3(0.4, 0.16, 0.48), shoes)
 	_box(_leg_r, Vector3(0, -0.78, -0.04), Vector3(0.4, 0.16, 0.48), shoes)
 
 	# Torso.
 	_torso = Node3D.new()
 	_hips.add_child(_torso)
-	_box(_torso, Vector3(0, 0.4, 0), Vector3(0.82, 0.8, 0.44), shirt)
+	_box(_torso, Vector3(0, 0.4, 0), Vector3(0.84, 0.8, 0.44), shirt)
 	# Hoodie pocket for a bit of detail.
 	_box(_torso, Vector3(0, 0.18, -0.225), Vector3(0.5, 0.18, 0.02), _mat(shirt_color.darkened(0.15)))
 
 	# Arms (pivot at shoulder).
-	_arm_l = _limb(_torso, Vector3(-0.6, 0.72, 0.0), Vector3(0.36, 0.8, 0.4), shirt)
-	_arm_r = _limb(_torso, Vector3(0.6, 0.72, 0.0), Vector3(0.36, 0.8, 0.4), shirt)
+	_arm_l = _limb(_torso, Vector3(-0.62, 0.72, 0.0), Vector3(0.39, 0.8, 0.42), shirt)
+	_arm_r = _limb(_torso, Vector3(0.62, 0.72, 0.0), Vector3(0.39, 0.8, 0.42), shirt)
 	_box(_arm_l, Vector3(0, -0.72, 0), Vector3(0.34, 0.16, 0.38), skin)
 	_box(_arm_r, Vector3(0, -0.72, 0), Vector3(0.34, 0.16, 0.38), skin)
 
@@ -102,9 +112,11 @@ func _box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material) -> MeshIns
 func _mat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
-	m.roughness = 0.6
+	# Glossy toy-plastic look.
+	m.roughness = 0.32
+	m.metallic_specular = 0.65
 	m.rim_enabled = true
-	m.rim = 0.3
+	m.rim = 0.22
 	m.rim_tint = 0.5
 	return m
 

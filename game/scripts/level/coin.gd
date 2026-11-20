@@ -23,6 +23,7 @@ func _ready() -> void:
 	_visual.rotation.x = PI * 0.5
 	_visual.material_override = Fx.metal_material(Color(1.0, 0.78, 0.15), 0.45)
 	_visual.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_visual)
 
 	var shape := CollisionShape3D.new()
