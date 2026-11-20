@@ -35,6 +35,7 @@ jobs:
             echo "::error::GDScript errors detected"
             exit 1
           fi
+          grep -q "SMOKE OK" smoke.log || { echo "::error::Main scene did not run"; exit 1; }
 
       - name: Export debug APK
         run: |

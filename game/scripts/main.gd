@@ -6,6 +6,8 @@ var player: Player
 var avatar: Avatar
 var camera_rig: CameraRig
 var hud: Hud
+var _smoke_time: float = 0.0
+var _smoke_done: bool = false
 
 
 func _ready() -> void:
@@ -86,3 +88,14 @@ func _build_environment() -> void:
 	sun.directional_shadow_max_distance = 70.0
 	sun.directional_shadow_fade_start = 0.85
 	add_child(sun)
+
+
+## CI smoke test: in headless mode, report that the scene really ran.
+func _process(delta: float) -> void:
+	if _smoke_done or DisplayServer.get_name() != "headless":
+		return
+	_smoke_time += delta
+	if _smoke_time >= 5.0:
+		_smoke_done = true
+		print("SMOKE OK coins=%d on_floor=%s player=%s" % [
+			Game.total_coins, player.is_on_floor(), player.global_position.snapped(Vector3.ONE * 0.01)])
