@@ -5,6 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push on the same branch cancels the older, still-running build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GODOT_VERSION: 4.7.2
 
@@ -130,6 +135,9 @@ jobs:
   publish:
     name: Publish dev-latest release (direct APK link)
     needs: [build, backend]
+    concurrency:
+      group: publish-dev-latest
+      cancel-in-progress: false
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
