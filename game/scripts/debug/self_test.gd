@@ -21,6 +21,10 @@ func _check(ok: bool, what: String) -> void:
 		_fails.append(what)
 
 
+func _send(ev: InputEvent) -> void:
+	get_viewport().push_input(ev, true)
+
+
 func _wait(sec: float) -> void:
 	await get_tree().create_timer(sec).timeout
 
@@ -49,22 +53,23 @@ func _run() -> void:
 	# --- Touch joystick path (events go through the full engine pipeline) ---
 	touch.visible = true
 	var vis := vp.get_visible_rect().size
-	var win := Vector2(DisplayServer.window_get_size())
-	var to_window := win / vis if vis.x > 0.0 and win.x > 0.0 else Vector2.ONE
+	# Headless has no real window, so deliver events straight to the viewport
+	# in viewport coordinates (what the engine does after stretch transform).
+	var to_window := Vector2.ONE
 	var p0 := Vector2(200, vis.y - 190)
 	start = player.global_position
 	var down := InputEventScreenTouch.new()
 	down.index = 0
 	down.pressed = true
 	down.position = p0 * to_window
-	Input.parse_input_event(down)
+	_send(down)
 	await get_tree().process_frame
 	for i in 5:
 		var drag := InputEventScreenDrag.new()
 		drag.index = 0
 		drag.position = (p0 + Vector2(0, -20.0 * (i + 1))) * to_window
 		drag.relative = Vector2(0, -20) * to_window
-		Input.parse_input_event(drag)
+		_send(drag)
 		await get_tree().process_frame
 	_log("touch_move=%s" % Game.touch_move)
 	_check(Game.touch_move.y > 0.5, "joystick produces forward input")
@@ -76,7 +81,7 @@ func _run() -> void:
 	up.index = 0
 	up.pressed = false
 	up.position = down.position
-	Input.parse_input_event(up)
+	_send(up)
 	await _wait(0.6)
 
 	# --- Touch jump button ---
@@ -86,7 +91,7 @@ func _run() -> void:
 	jdown.index = 1
 	jdown.pressed = true
 	jdown.position = jc * to_window
-	Input.parse_input_event(jdown)
+	_send(jdown)
 	var peak := y0
 	for i in 20:
 		await get_tree().physics_frame
@@ -95,7 +100,7 @@ func _run() -> void:
 	jup.index = 1
 	jup.pressed = false
 	jup.position = jdown.position
-	Input.parse_input_event(jup)
+	_send(jup)
 	_log("jump peak gain=%.2f" % (peak - y0))
 	_check(peak - y0 > 1.0, "touch jump button jumps")
 
