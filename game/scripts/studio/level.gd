@@ -37,6 +37,14 @@ const PRESETS: Array[Dictionary] = [
 const SPECIAL := ["spawn", "checkpoint", "kill", "jumppad", "coin", "finish"]
 const SOLID := ["block", "ramp", "ball", "cyl"]
 
+## Motion presets for solid parts: id -> label.
+const MOTIONS: Array[String] = ["", "slide_x", "slide_z", "lift", "spin", "spin_fast"]
+const MOTION_LABELS: Dictionary = {
+	"": "NONE", "slide_x": "SLIDE X", "slide_z": "SLIDE Z", "lift": "LIFT",
+	"spin": "SPIN", "spin_fast": "SPIN FAST",
+}
+const MAX_SCRIPT := 20000
+
 
 static func new_level(level_name: String = "My Game") -> Dictionary:
 	return {
@@ -76,6 +84,9 @@ static func sanitize(data: Variant) -> Dictionary:
 				parts.append(p)
 	if not parts.is_empty():
 		out["parts"] = parts
+	var script_text := str(d.get("script", ""))
+	if script_text != "":
+		out["script"] = script_text.substr(0, MAX_SCRIPT)
 	return out
 
 
@@ -88,8 +99,24 @@ static func _clean_part(item: Dictionary) -> Dictionary:
 	if not p.is_finite() or p.length() > 2000.0:
 		return {}
 	s = s.clamp(Vector3.ONE * 0.25, Vector3.ONE * 128.0)
-	return {"t": t, "p": _arr(p), "s": _arr(s), "r": clampi(int(item.get("r", 0)), 0, 3),
+	var out := {"t": t, "p": _arr(p), "s": _arr(s), "r": clampi(int(item.get("r", 0)), 0, 3),
 		"c": clampi(int(item.get("c", 0)), 0, COLORS.size() - 1)}
+	var n := clean_name(str(item.get("n", "")))
+	if n != "":
+		out["n"] = n
+	var m := str(item.get("m", ""))
+	if m != "" and m in MOTIONS and t in SOLID:
+		out["m"] = m
+	return out
+
+
+## Part names (used by scripts): letters, digits, _ and -, max 24.
+static func clean_name(text: String) -> String:
+	var out := ""
+	for ch in text.strip_edges():
+		if (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z") or (ch >= "0" and ch <= "9") or ch == "_" or ch == "-":
+			out += ch
+	return out.substr(0, 24)
 
 
 static func _vec(v: Variant, fallback: Vector3) -> Vector3:
@@ -145,16 +172,31 @@ static func part_shape(t: String) -> String:
 
 
 ## Builds a playable world from a level under `parent`.
-## Solid parts are batched; special parts become gameplay nodes.
-static func build_play(parent: Node3D, level: Dictionary) -> void:
+## Static solid parts are batched; moving/named parts get their own body
+## (so scripts can change them); special parts become gameplay nodes.
+## Returns {by_index: {i: Node3D}, by_name: {name: [Node3D]}}.
+static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 	var b := WorldBuilder.new(parent)
 	var course: String = level.get("name", "Custom Game")
-	for p: Dictionary in level["parts"]:
+	var reg := {"by_index": {}, "by_name": {}}
+	var parts: Array = level["parts"]
+	for i in parts.size():
+		var p: Dictionary = parts[i]
 		var t: String = p["t"]
 		var at := pos(p)
 		var sz := size(p)
 		var rot := Vector3(0, yaw(p), 0)
 		var col: Color = COLORS[int(p["c"])]
+		if t in SOLID and (p.has("m") or p.has("n")):
+			var node := _dynamic_part(parent, b, p)
+			node.set_meta("part_index", i)
+			(reg["by_index"] as Dictionary)[i] = node
+			if p.has("n"):
+				var byn: Dictionary = reg["by_name"]
+				if not byn.has(p["n"]):
+					byn[p["n"]] = []
+				(byn[p["n"]] as Array).append(node)
+			continue
 		match t:
 			"block", "ramp", "ball", "cyl":
 				b.part(part_shape(t), at, sz, col, true, "tiled", rot)
@@ -197,6 +239,45 @@ static func build_play(parent: Node3D, level: Dictionary) -> void:
 				fl.position = at + Vector3(0, sz.y * 0.5, 0)
 				parent.add_child(fl)
 	b.build()
+	return reg
+
+
+## A solid part as its own physics body (moving, spinning or scriptable).
+static func _dynamic_part(parent: Node3D, b: WorldBuilder, p: Dictionary) -> Node3D:
+	var t: String = p["t"]
+	var sz := size(p)
+	var shape := part_shape(t)
+	var m: String = p.get("m", "")
+	var body: Node3D
+	match m:
+		"slide_x", "slide_z", "lift":
+			var mp := MovingPlatform.new()
+			mp.travel = {"slide_x": Vector3(8, 0, 0), "slide_z": Vector3(0, 0, 8), "lift": Vector3(0, 6, 0)}[m]
+			mp.period = 4.0
+			body = mp
+		"spin", "spin_fast":
+			var sp := SpinningPart.new()
+			sp.speed = 1.2 if m == "spin" else 3.0
+			body = sp
+		_:
+			var sb := StaticBody3D.new()
+			sb.collision_layer = 1
+			sb.collision_mask = 0
+			body = sb
+	body.position = pos(p)
+	body.rotation.y = yaw(p)
+	var mi := MeshInstance3D.new()
+	mi.name = "Mesh"
+	mi.mesh = b.unit_mesh(shape)
+	mi.scale = sz
+	mi.material_override = Fx.block_material(COLORS[int(p["c"])])
+	body.add_child(mi)
+	var cs := CollisionShape3D.new()
+	cs.name = "Shape"
+	cs.shape = b.collision_shape(shape, sz)
+	body.add_child(cs)
+	parent.add_child(body)
+	return body
 
 
 # ------------------------------------------------------------ storage ---

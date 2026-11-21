@@ -73,6 +73,30 @@ func _run() -> void:
 	st.undo()
 	_check(int(p3["c"]) != 9, "undo reverts the paint", p3)
 
+	# --- Select tool: move, resize, motion, name, copy, undo ---
+	st.set_tool("select")
+	st.select(st._entry_of_part(p1))
+	_check(not st.selected_part().is_empty(), "select a part")
+	st.move_selected(Vector3(1, 0, 0))
+	_check(_p(p1) == Vector3(7, 1, 6), "move selected part", p1)
+	st.resize_selected(1, 2.0)
+	_check(Level.size(p1) == Vector3(2, 4, 2) and _p(p1) == Vector3(7, 2, 6), "resize grows upwards", p1)
+	st.cycle_motion()
+	_check(str(p1.get("m", "")) == "slide_x", "motion preset", p1)
+	st.name_selected("door")
+	_check(str(p1.get("n", "")) == "door", "name a part", p1)
+	var n_before := st.part_count()
+	var copy := st.duplicate_selected()
+	_check(st.part_count() == n_before + 1 and _p(copy) == Vector3(9, 2, 6) and copy.get("n", "") == "door",
+		"duplicate keeps settings and sits next to it", copy)
+	st.undo()
+	_check(st.part_count() == n_before, "undo duplicate")
+	st.select(st._entry_of_part(p1))
+	st.undo()
+	_check(not p1.has("n") and str(p1.get("m", "")) == "slide_x", "undo name keeps motion", p1)
+	st.select(st._entry_of_part(p1))
+	st.name_selected("door")
+
 	_check(st.save(), "save to disk")
 	var slot := st.slot
 	var loaded := Level.load_slot(slot)
@@ -89,6 +113,9 @@ func _run() -> void:
 		player.global_position if player != null else null)
 	_check(Game.total_coins >= 1, "coin part became a collectible", Game.total_coins)
 	_check(Game.current_course != "", "finish part starts the course timer")
+	var reg: Dictionary = ex.get("registry") if ex != null else {}
+	var named: Array = (reg.get("by_name", {}) as Dictionary).get("door", [])
+	_check(named.size() == 1 and named[0] is MovingPlatform, "named moving part is a MovingPlatform in play", named)
 	Level.delete_slot(slot)
 	_finish()
 

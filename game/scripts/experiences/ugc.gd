@@ -3,11 +3,13 @@ extends Experience
 ## The level data comes from Game.pending_level.
 
 var level: Dictionary = {}
+## {by_index: {i: Node3D}, by_name: {name: [Node3D]}} for scripts.
+var registry: Dictionary = {}
 
 
 func setup() -> void:
 	level = Level.sanitize(Game.pending_level)
-	Level.build_play(self, level)
+	registry = Level.build_play(self, level)
 	spawn_point = Level.spawn_point(level)
 	var lowest := spawn_point.y
 	for p: Dictionary in level["parts"]:

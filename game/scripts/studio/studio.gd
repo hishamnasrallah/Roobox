@@ -42,6 +42,12 @@ var _preset_buttons: Dictionary = {}
 var _color_buttons: Array[Button] = []
 var _rot_button: Button
 var _mouse_down: Vector2 = Vector2(-1, -1)
+var _selected: Dictionary = {}
+var _highlight: MeshInstance3D
+var _sel_panel: PanelContainer
+var _sel_info: Label
+var _sel_motion: Button
+var _sel_name: LineEdit
 
 
 func _ready() -> void:
@@ -126,6 +132,8 @@ func use_tool_at(screen_pos: Vector2) -> void:
 	match tool:
 		"build":
 			place_at(hit["position"], hit["normal"])
+		"select":
+			select(_entry_for(collider))
 		"paint":
 			paint(_entry_for(collider))
 		"delete":
@@ -183,6 +191,8 @@ func paint(e: Dictionary) -> void:
 func remove(e: Dictionary) -> void:
 	if e.is_empty():
 		return
+	if is_same(e, _selected):
+		select({})
 	var part: Dictionary = e["part"]
 	if part["t"] == "spawn":
 		_say("Every game needs a SPAWN. Place a new one to move it.")
@@ -217,6 +227,13 @@ func undo() -> void:
 			var e2 := _entry_of_part(part)
 			if not e2.is_empty():
 				_rebuild_entry(e2)
+		"edit":
+			part.clear()
+			part.merge(u["old"] as Dictionary)
+			var e3 := _entry_of_part(part)
+			if not e3.is_empty():
+				_rebuild_entry(e3)
+	_update_selection()
 	_refresh_ui()
 
 
@@ -227,7 +244,152 @@ func rotate_preset() -> void:
 
 func set_tool(t: String) -> void:
 	tool = t
+	if t != "select":
+		select({})
 	_refresh_ui()
+
+
+# ============================================================ selection ===
+
+func select(e: Dictionary) -> void:
+	_selected = e
+	_update_selection()
+
+
+func selected_part() -> Dictionary:
+	return _selected["part"] if not _selected.is_empty() else {}
+
+
+func _begin_edit() -> Dictionary:
+	if _selected.is_empty():
+		return {}
+	var part: Dictionary = _selected["part"]
+	_undo.append({"op": "edit", "part": part, "old": part.duplicate(true)})
+	return part
+
+
+func _end_edit() -> void:
+	_rebuild_entry(_selected)
+	_update_selection()
+
+
+## Moves the selected part by whole grid steps.
+func move_selected(d: Vector3) -> void:
+	var part := _begin_edit()
+	if part.is_empty():
+		return
+	part["p"] = Level._arr(Level.pos(part) + d * Level.GRID)
+	_end_edit()
+
+
+## Grows/shrinks the selected part along one local axis (keeps it on the grid).
+func resize_selected(axis: int, delta: float) -> void:
+	var part := _begin_edit()
+	if part.is_empty():
+		return
+	var s := Level.size(part)
+	var v := clampf(s[axis] + delta, 1.0, 64.0)
+	var grow := v - s[axis]
+	s[axis] = v
+	part["s"] = Level._arr(s)
+	if axis == 1:
+		# Grow upwards so it stays on whatever it stands on.
+		part["p"] = Level._arr(Level.pos(part) + Vector3(0, grow * 0.5, 0))
+	_end_edit()
+
+
+func rotate_selected() -> void:
+	var part := _begin_edit()
+	if part.is_empty():
+		return
+	part["r"] = (int(part.get("r", 0)) + 1) % 4
+	_end_edit()
+
+
+func duplicate_selected() -> Dictionary:
+	if _selected.is_empty():
+		return {}
+	var src: Dictionary = _selected["part"]
+	if src["t"] == "spawn":
+		_say("There can only be one SPAWN.")
+		return {}
+	var copy: Dictionary = src.duplicate(true)
+	var ws := Level.world_size(Level.size(src), int(src.get("r", 0)))
+	copy["p"] = Level._arr(Level.pos(src) + Vector3(ws.x, 0, 0))
+	_add_part(copy)
+	_undo.append({"op": "add", "part": copy})
+	select(_entry_of_part(copy))
+	_refresh_ui()
+	return copy
+
+
+func cycle_motion() -> void:
+	var part := _begin_edit()
+	if part.is_empty():
+		return
+	if not (part["t"] in Level.SOLID):
+		_undo.pop_back()
+		_say("Only solid parts can move.")
+		return
+	var i := Level.MOTIONS.find(str(part.get("m", "")))
+	var next := Level.MOTIONS[(i + 1) % Level.MOTIONS.size()]
+	if next == "":
+		part.erase("m")
+	else:
+		part["m"] = next
+	_end_edit()
+
+
+func name_selected(text: String) -> void:
+	var part := _begin_edit()
+	if part.is_empty():
+		return
+	var n := Level.clean_name(text)
+	if n == "":
+		part.erase("n")
+	else:
+		part["n"] = n
+	_end_edit()
+	_say("Named \"%s\" - scripts can find it with world.find(\"%s\")" % [n, n] if n != "" else "Name removed.")
+
+
+func delete_selected() -> void:
+	if not _selected.is_empty():
+		remove(_selected)
+
+
+func _update_selection() -> void:
+	if _highlight == null:
+		_highlight = MeshInstance3D.new()
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(1.0, 0.85, 0.2, 0.35)
+		mat.no_depth_test = true
+		_highlight.material_override = mat
+		_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_highlight)
+	if _selected.is_empty() or not is_instance_valid(_selected.get("node")):
+		_selected = {}
+		_highlight.visible = false
+		if _sel_panel != null:
+			_sel_panel.visible = false
+		return
+	var part: Dictionary = _selected["part"]
+	_highlight.visible = true
+	_highlight.mesh = _cache.unit_mesh(Level.part_shape(part["t"]))
+	_highlight.global_position = Level.pos(part)
+	_highlight.rotation = Vector3(0, Level.yaw(part), 0)
+	_highlight.scale = Level.size(part) + Vector3.ONE * 0.12
+	if _sel_panel != null:
+		_sel_panel.visible = true
+		var s := Level.size(part)
+		_sel_info.text = "%s  %dx%dx%d%s" % [str(Level.preset(part["t"]).get("label", part["t"])) if part["t"] in Level.SPECIAL else str(part["t"]).to_upper(),
+			int(s.x), int(s.y), int(s.z), ("  \"%s\"" % part["n"]) if part.has("n") else ""]
+		_sel_motion.text = "MOTION: %s" % Level.MOTION_LABELS.get(str(part.get("m", "")), "NONE")
+		_sel_motion.disabled = not (part["t"] in Level.SOLID)
+		if not _sel_name.has_focus():
+			_sel_name.text = str(part.get("n", ""))
 
 
 func set_preset(id: String) -> void:
@@ -269,6 +431,8 @@ func _spawn_node(part: Dictionary) -> void:
 
 
 func _remove_entry(e: Dictionary, _record: bool) -> void:
+	if is_same(e, _selected):
+		_selected = {}
 	(e["node"] as Node).queue_free()
 	_entries.erase(e)
 	var parts: Array = level["parts"]
@@ -315,9 +479,16 @@ func _make_node(part: Dictionary) -> Node3D:
 	var cs := CollisionShape3D.new()
 	cs.shape = _cache.collision_shape(shape, s)
 	body.add_child(cs)
+	var tag := ""
 	if t in Level.SPECIAL:
+		tag = str(Level.preset(t)["label"])
+	if part.has("n"):
+		tag = ("%s\n" % tag if tag != "" else "") + "\"%s\"" % part["n"]
+	if part.has("m"):
+		tag = ("%s\n" % tag if tag != "" else "") + str(Level.MOTION_LABELS.get(part["m"], ""))
+	if tag != "":
 		var l := Label3D.new()
-		l.text = str(Level.preset(t)["label"])
+		l.text = tag
 		l.font_size = 64
 		l.outline_size = 14
 		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -380,39 +551,92 @@ func _build_ui() -> void:
 		b.pressed.connect(spec[2])
 		top.add_child(b)
 
-	# Tool column (left).
-	var tools := VBoxContainer.new()
-	tools.position = Vector2(16, 92)
-	tools.add_theme_constant_override("separation", 8)
+	# Tools row (under the top bar).
+	var tools := HBoxContainer.new()
+	tools.position = Vector2(16, 84)
+	tools.add_theme_constant_override("separation", 6)
 	root.add_child(tools)
-	for t in ["build", "paint", "delete"]:
-		var tb := UiStyle.button(t.to_upper(), Color(0.25, 0.3, 0.48), 20, 54)
-		tb.custom_minimum_size.x = 150
+	for t in ["build", "select", "paint", "delete"]:
+		var tb := UiStyle.button(t.to_upper(), Color(0.25, 0.3, 0.48), 18, 50)
+		tb.custom_minimum_size.x = 116
 		var tool_id: String = t
 		tb.pressed.connect(func() -> void: set_tool(tool_id))
 		tools.add_child(tb)
 		_tool_buttons[t] = tb
-	_rot_button = UiStyle.button("ROTATE", Color(0.25, 0.3, 0.48), 20, 54)
+	_rot_button = UiStyle.button("ROTATE", Color(0.25, 0.3, 0.48), 18, 50)
+	_rot_button.custom_minimum_size.x = 130
 	_rot_button.pressed.connect(rotate_preset)
 	tools.add_child(_rot_button)
-	_touch.blockers.append(tools)
-
-	# Up / down (right).
-	var vert := VBoxContainer.new()
-	vert.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	vert.offset_left = -110
-	vert.offset_right = -16
-	vert.offset_top = -120
-	vert.offset_bottom = 40
-	vert.add_theme_constant_override("separation", 10)
-	root.add_child(vert)
 	for spec in [["UP", 1.0], ["DOWN", -1.0]]:
-		var vb := UiStyle.button(spec[0], Color(0.3, 0.33, 0.45), 20, 70)
+		var vb := UiStyle.button(spec[0], Color(0.3, 0.33, 0.45), 18, 50)
+		vb.custom_minimum_size.x = 96
 		var dirv: float = spec[1]
 		vb.button_down.connect(func() -> void: _vertical = dirv)
 		vb.button_up.connect(func() -> void: _vertical = 0.0)
-		vert.add_child(vb)
-	_touch.blockers.append(vert)
+		tools.add_child(vb)
+	_touch.blockers.append(tools)
+
+	# Selection panel (right).
+	_sel_panel = PanelContainer.new()
+	_sel_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_sel_panel.offset_left = -360
+	_sel_panel.offset_right = -12
+	_sel_panel.offset_top = 144
+	_sel_panel.add_theme_stylebox_override("panel", UiStyle.box(Color(0.08, 0.1, 0.2, 0.85), 16, 12))
+	_sel_panel.visible = false
+	root.add_child(_sel_panel)
+	var sv := VBoxContainer.new()
+	sv.add_theme_constant_override("separation", 6)
+	_sel_panel.add_child(sv)
+	_sel_info = UiStyle.label(18, Color(1.0, 0.85, 0.3))
+	sv.add_child(_sel_info)
+	for row_spec in [["MOVE", [["X-", 0, -1.0], ["X+", 0, 1.0], ["Y-", 1, -1.0], ["Y+", 1, 1.0], ["Z-", 2, -1.0], ["Z+", 2, 1.0]]],
+			["SIZE", [["W-", 0, -1.0], ["W+", 0, 1.0], ["H-", 1, -1.0], ["H+", 1, 1.0], ["D-", 2, -1.0], ["D+", 2, 1.0]]]]:
+		var lab := UiStyle.label(14, Color(1, 1, 1, 0.7))
+		lab.text = row_spec[0]
+		sv.add_child(lab)
+		var grid := HBoxContainer.new()
+		grid.add_theme_constant_override("separation", 4)
+		sv.add_child(grid)
+		for bspec in row_spec[1]:
+			var bb := UiStyle.button(bspec[0], Color(0.3, 0.36, 0.55), 15, 42)
+			bb.custom_minimum_size.x = 52
+			var axis: int = bspec[1]
+			var amount: float = bspec[2]
+			if row_spec[0] == "MOVE":
+				var dv := Vector3.ZERO
+				dv[axis] = amount
+				bb.pressed.connect(func() -> void: move_selected(dv))
+			else:
+				bb.pressed.connect(func() -> void: resize_selected(axis, amount))
+			grid.add_child(bb)
+	var acts := HBoxContainer.new()
+	acts.add_theme_constant_override("separation", 4)
+	sv.add_child(acts)
+	for aspec in [["ROTATE", rotate_selected], ["COPY", duplicate_selected], ["DELETE", delete_selected]]:
+		var ab := UiStyle.button(aspec[0], Color(0.45, 0.3, 0.55) if aspec[0] != "DELETE" else Color(0.6, 0.3, 0.3), 15, 44)
+		ab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ab.pressed.connect(aspec[1])
+		acts.add_child(ab)
+	_sel_motion = UiStyle.button("MOTION: NONE", Color(0.2, 0.5, 0.6), 15, 44)
+	_sel_motion.pressed.connect(cycle_motion)
+	sv.add_child(_sel_motion)
+	var nrow := HBoxContainer.new()
+	nrow.add_theme_constant_override("separation", 4)
+	sv.add_child(nrow)
+	_sel_name = UiStyle.line_edit("name (for scripts)", 18)
+	_sel_name.custom_minimum_size.y = 44
+	_sel_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sel_name.max_length = 24
+	_sel_name.focus_entered.connect(func() -> void: Game.input_blocked = true)
+	_sel_name.focus_exited.connect(func() -> void: Game.input_blocked = false)
+	_sel_name.text_submitted.connect(func(t: String) -> void: name_selected(t))
+	nrow.add_child(_sel_name)
+	var nb := UiStyle.button("SET", Color(0.2, 0.6, 0.35), 15, 44)
+	nb.custom_minimum_size.x = 70
+	nb.pressed.connect(func() -> void: name_selected(_sel_name.text))
+	nrow.add_child(nb)
+	_touch.blockers.append(_sel_panel)
 
 	# Bottom: colors + presets.
 	var bottom := VBoxContainer.new()
