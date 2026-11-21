@@ -43,7 +43,11 @@ const AR: Dictionary = {
 	"CHAT": "دردشة", "HOME": "البداية", "MENU": "القائمة", "GO!": "انطلق!", "CHECKPOINT!": "نقطة حفظ!",
 	"YOU WIN!": "فزت!", "COURSE CLEAR!": "خلّصت المسار!", "BACK TO SPAWN": "ارجع للبداية",
 	"KEEP EXPLORING": "كمّل استكشاف", "PLAYERS": "اللاعبين", "MUTE": "كتم", "UNMUTE": "إلغاء الكتم",
-	"REPORT": "تبليغ", "Graphics lowered for smoother play": "خففنا الرسوم ليصير اللعب أنعم", "Report sent - thank you": "انبعت التبليغ - شكراً", "Player muted": "انكتم اللاعب",
+	"REPORT": "تبليغ", "NEXT": "التالي",
+	"Move with the joystick on the left side of the screen.": "تحرّك بالجويستك على يسار الشاشة.",
+	"Tap the arrow button to jump. Hold it to jump higher.": "اضغط زر السهم لتنط. اضغط مطوّل لتنط أعلى.",
+	"Drag on the right side to look around. Pinch to zoom.": "اسحب على يمين الشاشة لتدوّر الكاميرا. قرّب وبعّد بإصبعين.",
+	"Press HOME to go back to the start. Have fun!": "اضغط البداية لترجع لنقطة الانطلاق. استمتع!", "Graphics lowered for smoother play": "خففنا الرسوم ليصير اللعب أنعم", "Report sent - thank you": "انبعت التبليغ - شكراً", "Player muted": "انكتم اللاعب",
 	"Chat is off (SETTINGS)": "الدردشة مقفلة (الإعدادات)", "Chat with other players": "الدردشة مع اللاعبين",
 	"You are playing alone. HOST or JOIN to play with friends.": "عم تلعب لحالك. استضف أو انضم لتلعب مع أصحابك.", "DISCONNECTED": "انقطع الاتصال", "Say something...": "اكتب شي...",
 	# Studio

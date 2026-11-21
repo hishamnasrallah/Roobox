@@ -60,6 +60,7 @@ var graphics: String = "medium"
 var volume: float = 0.8
 var show_fps: bool = true
 var chat_enabled: bool = true
+var tutorial_done: bool = false
 ## Player names muted this session (their chat is hidden).
 var muted: Array = []
 
@@ -125,6 +126,7 @@ func load_profile() -> void:
 		volume = clampf(float(cfg.get_value("settings", "volume", 0.8)), 0.0, 1.0)
 		show_fps = bool(cfg.get_value("settings", "show_fps", true))
 		chat_enabled = bool(cfg.get_value("settings", "chat", true))
+		tutorial_done = bool(cfg.get_value("settings", "tutorial_done", false))
 		backend_url = str(cfg.get_value("online", "backend_url", ""))
 		backend_key = str(cfg.get_value("online", "backend_key", "defaultkey"))
 		device_id = str(cfg.get_value("online", "device_id", ""))
@@ -172,6 +174,7 @@ func save_profile() -> void:
 	cfg.set_value("settings", "volume", volume)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "chat", chat_enabled)
+	cfg.set_value("settings", "tutorial_done", tutorial_done)
 	cfg.set_value("online", "backend_url", backend_url)
 	cfg.set_value("online", "backend_key", backend_key)
 	cfg.set_value("online", "device_id", device_id)

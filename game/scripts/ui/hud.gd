@@ -183,6 +183,8 @@ func _ready() -> void:
 
 	_build_win_panel(root)
 	_build_players_panel(root)
+	if not Game.tutorial_done and DisplayServer.get_name() != "headless":
+		_build_tutorial(root)
 
 	Game.coins_changed.connect(_on_coins_changed)
 	Game.checkpoint_reached.connect(_on_checkpoint)
@@ -391,6 +393,52 @@ func _build_win_panel(root: Control) -> void:
 	var cont := UiStyle.button("KEEP EXPLORING", Color(0.3, 0.4, 0.6), 26, 64)
 	cont.pressed.connect(_hide_win)
 	vb.add_child(cont)
+
+
+# ------------------------------------------------------------ tutorial ---
+
+const TIPS: Array[String] = [
+	"Move with the joystick on the left side of the screen.",
+	"Tap the arrow button to jump. Hold it to jump higher.",
+	"Drag on the right side to look around. Pinch to zoom.",
+	"Press HOME to go back to the start. Have fun!",
+]
+var _tip_index: int = 0
+var _tip_panel: PanelContainer
+var _tip_label: Label
+
+
+func _build_tutorial(root: Control) -> void:
+	_tip_panel = PanelContainer.new()
+	_tip_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_tip_panel.offset_left = -330
+	_tip_panel.offset_right = 330
+	_tip_panel.offset_top = -40
+	_tip_panel.offset_bottom = 120
+	_tip_panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
+	root.add_child(_tip_panel)
+	touch.blockers.append(_tip_panel)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 12)
+	_tip_panel.add_child(vb)
+	_tip_label = UiStyle.label(26)
+	_tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(_tip_label)
+	var next := UiStyle.button("NEXT", Color(0.2, 0.72, 0.35), 22, 56)
+	next.pressed.connect(_next_tip)
+	vb.add_child(next)
+	_tip_label.text = TIPS[0]
+
+
+func _next_tip() -> void:
+	_tip_index += 1
+	if _tip_index >= TIPS.size():
+		_tip_panel.queue_free()
+		Game.tutorial_done = true
+		Game.save_profile()
+		return
+	_tip_label.text = TIPS[_tip_index]
 
 
 # ------------------------------------------------------------- players ---
