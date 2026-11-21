@@ -304,7 +304,7 @@ func _chat_down(id: int, sender: String, text: String) -> void:
 
 func _clean_text(text: String, max_len: int) -> String:
 	var t := text.strip_edges().replace("\n", " ").replace("[", "(").replace("]", ")")
-	return t.substr(0, max_len)
+	return ChatFilter.clean(t.substr(0, max_len))
 
 
 func _sanitize(info: Dictionary) -> Dictionary:

@@ -8,6 +8,7 @@ signal player_died
 signal player_respawned
 signal course_started(course_name: String)
 signal course_completed(course_name: String, time_sec: float)
+signal settings_changed
 
 const LOOK_SENSITIVITY_MOUSE := 0.0045
 const LOOK_SENSITIVITY_TOUCH := 0.0065
@@ -51,6 +52,16 @@ var owned_items: Array = []
 ## slot -> item id
 var equipped: Dictionary = {}
 var last_daily: String = ""
+
+# --- Settings ---
+var language: String = ""
+var sensitivity: float = 1.0
+var graphics: String = "medium"
+var volume: float = 0.8
+var show_fps: bool = true
+var chat_enabled: bool = true
+## Player names muted this session (their chat is hidden).
+var muted: Array = []
 
 const DAILY_REWARD := 100
 ## Account server (Nakama), e.g. "http://203.0.113.5:7350". Empty = guest.
@@ -108,9 +119,20 @@ func load_profile() -> void:
 		owned_items = cfg.get_value("shop", "owned", []) as Array
 		equipped = cfg.get_value("shop", "equipped", {}) as Dictionary
 		last_daily = str(cfg.get_value("shop", "last_daily", ""))
+		language = str(cfg.get_value("settings", "language", ""))
+		sensitivity = clampf(float(cfg.get_value("settings", "sensitivity", 1.0)), 0.3, 2.5)
+		graphics = str(cfg.get_value("settings", "graphics", "medium"))
+		volume = clampf(float(cfg.get_value("settings", "volume", 0.8)), 0.0, 1.0)
+		show_fps = bool(cfg.get_value("settings", "show_fps", true))
+		chat_enabled = bool(cfg.get_value("settings", "chat", true))
 		backend_url = str(cfg.get_value("online", "backend_url", ""))
 		backend_key = str(cfg.get_value("online", "backend_key", "defaultkey"))
 		device_id = str(cfg.get_value("online", "device_id", ""))
+	if language == "":
+		language = "ar" if OS.get_locale_language() == "ar" else "en"
+	if not (graphics in ["low", "medium", "high"]):
+		graphics = "medium"
+	apply_settings()
 	if device_id.length() < 16:
 		device_id = _new_device_id()
 		save_profile()
@@ -119,6 +141,15 @@ func load_profile() -> void:
 	shirt_index = clampi(shirt_index, 0, SHIRT_COLORS.size() - 1)
 	pants_index = clampi(pants_index, 0, PANTS_COLORS.size() - 1)
 	skin_index = clampi(skin_index, 0, SKIN_COLORS.size() - 1)
+
+
+## Applies language, volume (and notifies graphics listeners).
+func apply_settings() -> void:
+	I18n.set_language(language)
+	var bus := AudioServer.get_bus_index("Master")
+	AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(volume, 0.0001)))
+	AudioServer.set_bus_mute(bus, volume <= 0.001)
+	settings_changed.emit()
 
 
 func save_profile() -> void:
@@ -135,6 +166,12 @@ func save_profile() -> void:
 	cfg.set_value("shop", "owned", owned_items)
 	cfg.set_value("shop", "equipped", equipped)
 	cfg.set_value("shop", "last_daily", last_daily)
+	cfg.set_value("settings", "language", language)
+	cfg.set_value("settings", "sensitivity", sensitivity)
+	cfg.set_value("settings", "graphics", graphics)
+	cfg.set_value("settings", "volume", volume)
+	cfg.set_value("settings", "show_fps", show_fps)
+	cfg.set_value("settings", "chat", chat_enabled)
 	cfg.set_value("online", "backend_url", backend_url)
 	cfg.set_value("online", "backend_key", backend_key)
 	cfg.set_value("online", "device_id", device_id)
@@ -320,7 +357,7 @@ func consume_jump() -> bool:
 
 
 func add_look_touch(relative: Vector2) -> void:
-	_look_delta += relative * LOOK_SENSITIVITY_TOUCH
+	_look_delta += relative * LOOK_SENSITIVITY_TOUCH * sensitivity
 
 
 func add_zoom(amount: float) -> void:
@@ -363,7 +400,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			add_zoom(1.0)
 	elif event is InputEventMouseMotion and _mouse_looking:
 		var mm := event as InputEventMouseMotion
-		_look_delta += mm.relative * LOOK_SENSITIVITY_MOUSE
+		_look_delta += mm.relative * LOOK_SENSITIVITY_MOUSE * sensitivity
 
 
 func _register_actions() -> void:

@@ -22,6 +22,10 @@ var _chat_log: VBoxContainer
 var _chat_edit: LineEdit
 var _win_panel: PanelContainer
 var _win_stats: Label
+var _players_panel: PanelContainer
+var _players_list: VBoxContainer
+var _players_btn: Button
+var _chat_history: Array = []
 
 
 class CoinIcon:
@@ -96,7 +100,7 @@ func _ready() -> void:
 	# --- Buttons (top-right) ---
 	var btn_row := HBoxContainer.new()
 	btn_row.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	btn_row.offset_left = -460
+	btn_row.offset_left = -600
 	btn_row.offset_right = -24
 	btn_row.offset_top = 16
 	btn_row.offset_bottom = 80
@@ -107,6 +111,10 @@ func _ready() -> void:
 	chat_btn.custom_minimum_size.x = 120
 	chat_btn.pressed.connect(open_chat)
 	btn_row.add_child(chat_btn)
+	_players_btn = UiStyle.button("PLAYERS", Color(0.45, 0.35, 0.65), 22, 60)
+	_players_btn.custom_minimum_size.x = 130
+	_players_btn.pressed.connect(toggle_players)
+	btn_row.add_child(_players_btn)
 	var home_btn := UiStyle.button("HOME", Color(0.95, 0.5, 0.2), 24, 60)
 	home_btn.custom_minimum_size.x = 120
 	home_btn.pressed.connect(func() -> void: home_pressed.emit())
@@ -174,6 +182,7 @@ func _ready() -> void:
 	root.add_child(_fade)
 
 	_build_win_panel(root)
+	_build_players_panel(root)
 
 	Game.coins_changed.connect(_on_coins_changed)
 	Game.checkpoint_reached.connect(_on_checkpoint)
@@ -194,7 +203,8 @@ func _process(_delta: float) -> void:
 	var online := ""
 	if Network.is_online():
 		online = "   ·   %d online" % (Network.players.size() + (0 if Network.mode == "host" else 1))
-	_stats_label.text = "%d FPS%s" % [Engine.get_frames_per_second(), online]
+	_stats_label.visible = Game.show_fps or online != ""
+	_stats_label.text = ("%d FPS" % Engine.get_frames_per_second() if Game.show_fps else "") + online
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -240,6 +250,9 @@ func refresh_coins() -> void:
 # ------------------------------------------------------------------ chat ---
 
 func open_chat() -> void:
+	if not Game.chat_enabled:
+		show_toast("Chat is off (SETTINGS)", Color(1, 0.8, 0.5))
+		return
 	_chat_edit.visible = true
 	_chat_edit.text = ""
 	_chat_edit.grab_focus()
@@ -276,7 +289,12 @@ func add_chat_line(text: String, color: Color = Color(1, 1, 1)) -> void:
 
 
 func _on_chat_received(_id: int, sender: String, text: String) -> void:
-	add_chat_line("%s: %s" % [sender, text])
+	_chat_history.append("%s: %s" % [sender, text])
+	if _chat_history.size() > 40:
+		_chat_history.pop_front()
+	if not Game.chat_enabled or sender in Game.muted:
+		return
+	add_chat_line("%s: %s" % [sender, ChatFilter.clean(text)])
 	Sfx.play("pop", -4.0)
 
 
@@ -373,6 +391,79 @@ func _build_win_panel(root: Control) -> void:
 	var cont := UiStyle.button("KEEP EXPLORING", Color(0.3, 0.4, 0.6), 26, 64)
 	cont.pressed.connect(_hide_win)
 	vb.add_child(cont)
+
+
+# ------------------------------------------------------------- players ---
+
+func _build_players_panel(root: Control) -> void:
+	_players_panel = PanelContainer.new()
+	_players_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_players_panel.offset_left = -560
+	_players_panel.offset_right = -24
+	_players_panel.offset_top = 120
+	_players_panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
+	_players_panel.visible = false
+	root.add_child(_players_panel)
+	_players_list = VBoxContainer.new()
+	_players_list.add_theme_constant_override("separation", 8)
+	_players_panel.add_child(_players_list)
+	touch.blockers.append(_players_panel)
+
+
+func toggle_players() -> void:
+	_players_panel.visible = not _players_panel.visible
+	if _players_panel.visible:
+		_refresh_players()
+
+
+func _refresh_players() -> void:
+	for ch in _players_list.get_children():
+		ch.queue_free()
+	var title := UiStyle.label(28, Color(1.0, 0.85, 0.3))
+	title.text = "PLAYERS"
+	_players_list.add_child(title)
+	if Network.players.is_empty():
+		var l := UiStyle.label(20, Color(1, 1, 1, 0.7))
+		l.text = "You are playing alone. HOST or JOIN to play with friends."
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 480
+		_players_list.add_child(l)
+		return
+	for id: int in Network.players:
+		var info: Dictionary = Network.players[id]
+		var pname := str(info.get("name", "Player"))
+		if id == Network.my_id():
+			continue
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		_players_list.add_child(row)
+		var l2 := UiStyle.label(22)
+		l2.text = pname
+		l2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(l2)
+		var muted := pname in Game.muted
+		var mb := UiStyle.button("UNMUTE" if muted else "MUTE", Color(0.4, 0.4, 0.5), 16, 46)
+		mb.pressed.connect(func() -> void: _toggle_mute(pname))
+		row.add_child(mb)
+		var rb := UiStyle.button("REPORT", Color(0.7, 0.3, 0.3), 16, 46)
+		rb.pressed.connect(func() -> void: _report(pname))
+		row.add_child(rb)
+
+
+func _toggle_mute(pname: String) -> void:
+	if pname in Game.muted:
+		Game.muted.erase(pname)
+	else:
+		Game.muted.append(pname)
+	_refresh_players()
+
+
+func _report(pname: String) -> void:
+	if not Game.muted.has(pname):
+		Game.muted.append(pname)
+	var ok: bool = await Backend.report_player(pname, "player report", _chat_history)
+	show_toast("Report sent - thank you" if ok else "Player muted", Color(1, 0.85, 0.5))
+	_refresh_players()
 
 
 func _on_win_resized() -> void:

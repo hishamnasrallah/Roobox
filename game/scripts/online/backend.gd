@@ -232,6 +232,21 @@ func load_community(owner: String, key: String) -> Dictionary:
 	return Level.sanitize(data) if not data.is_empty() else {}
 
 
+# -------------------------------------------------------------- safety ---
+
+## Stores a report for moderators (visible in the Nakama console).
+func report_player(target_name: String, reason: String, context: Array) -> bool:
+	if not online:
+		return false
+	var key := "r%d_%d" % [Time.get_unix_time_from_system(), randi() % 100000]
+	var r := await client.write_object("reports", key, {
+		"target": target_name, "reason": reason, "context": context.slice(-20),
+		"reporter": Game.player_name, "time": int(Time.get_unix_time_from_system()),
+		"experience": Network.experience_id,
+	})
+	return r["ok"]
+
+
 # ------------------------------------------------------------ friends ---
 
 ## Returns [{id, username, name, online, state}] (state: 0 friend, 1 sent, 2 received).

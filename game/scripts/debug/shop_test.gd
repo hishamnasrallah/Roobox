@@ -53,6 +53,14 @@ func _ready() -> void:
 	_check(Game.claim_daily() == Game.DAILY_REWARD and Game.wallet() == before + Game.DAILY_REWARD, "daily reward")
 	_check(Game.claim_daily() == 0, "daily reward only once per day")
 
+	# --- Chat filter (safety) ---
+	_check(ChatFilter.clean("hello friend") == "hello friend", "clean text is untouched")
+	_check(not ChatFilter.clean("you fuck").contains("fuck"), "English bad word hidden", ChatFilter.clean("you fuck"))
+	_check(not ChatFilter.clean("يا شرموط").contains("شرموط"), "Arabic bad word hidden", ChatFilter.clean("يا شرموط"))
+	_check(ChatFilter.clean("go to www.example.com").contains("[link]"), "links hidden", ChatFilter.clean("go to www.example.com"))
+	_check(ChatFilter.clean("call 0791234567").contains("[hidden]"), "phone numbers hidden", ChatFilter.clean("call 0791234567"))
+	_check(Network._clean_text("fuck [b]", 120) == "**** (b)", "network chat is filtered", Network._clean_text("fuck [b]", 120))
+
 	Game.lifetime_coins = saved[0]
 	Game.spent_coins = saved[1]
 	Game.owned_items = saved[2]

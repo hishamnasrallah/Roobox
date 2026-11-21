@@ -570,6 +570,34 @@ func _build_environment() -> void:
 	sun.directional_shadow_fade_start = 0.85
 	add_child(sun)
 	_sun = sun
+	if not Game.settings_changed.is_connected(_apply_graphics):
+		Game.settings_changed.connect(_apply_graphics)
+	_apply_graphics()
+
+
+## Graphics quality: shadows, anti-aliasing, render scale, glow.
+func _apply_graphics() -> void:
+	if _env == null:
+		return
+	var vp := get_viewport()
+	match Game.graphics:
+		"low":
+			_sun.shadow_enabled = false
+			vp.msaa_3d = Viewport.MSAA_DISABLED
+			vp.scaling_3d_scale = 0.7
+			_env.glow_enabled = false
+		"high":
+			_sun.shadow_enabled = true
+			_sun.directional_shadow_max_distance = 110.0
+			vp.msaa_3d = Viewport.MSAA_4X
+			vp.scaling_3d_scale = 1.0
+			_env.glow_enabled = true
+		_:
+			_sun.shadow_enabled = true
+			_sun.directional_shadow_max_distance = 70.0
+			vp.msaa_3d = Viewport.MSAA_2X
+			vp.scaling_3d_scale = 0.85
+			_env.glow_enabled = true
 
 
 ## Sky/lighting presets used by creations: day, sunset, night, space, fog.

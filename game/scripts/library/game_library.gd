@@ -74,7 +74,7 @@ static func entry(game_id: String) -> Dictionary:
 		return {}
 	return {
 		"id": game_id, "genre": g["id"], "theme": th["id"],
-		"title": "%s %s" % [th["title"], g["title"]],
+		"title": I18n.game_title(th["title"], g["title"]),
 		"desc": g["desc"], "color": GENRE_COLORS.get(g["id"], Color.WHITE),
 	}
 

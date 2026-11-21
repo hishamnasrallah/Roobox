@@ -124,7 +124,7 @@ func open_tab(t: String) -> void:
 
 func _refresh_account() -> void:
 	if _account_label != null:
-		_account_label.text = "%s\nCoins: %d" % [Backend.status_text(), Game.wallet()]
+		_account_label.text = "%s\n%s" % [Backend.status_text(), tr("Coins: %d") % Game.wallet()]
 
 
 func set_busy(busy: bool) -> void:
@@ -285,7 +285,7 @@ func _refresh_library() -> void:
 		if _lib_query != "" and not str(e["title"]).to_lower().contains(_lib_query):
 			continue
 		matches.append(e)
-	_lib_count.text = "%d games" % matches.size()
+	_lib_count.text = tr("%d games") % matches.size()
 	for i in mini(_lib_shown, matches.size()):
 		_lib_grid.add_child(_lib_card(matches[i]))
 	_lib_more.visible = matches.size() > _lib_shown
@@ -318,7 +318,7 @@ func _show_library_detail(game_id: String) -> void:
 	_content.add_child(back)
 	_text(_content, e["title"], 44, col.lightened(0.35))
 	_text(_content, e["desc"], 22, Color(1, 1, 1, 0.9))
-	_text(_content, "Type: %s   -   Theme: %s" % [str(e["genre"]).to_upper(), str(e["theme"]).to_upper()], 18, Color(1, 1, 1, 0.6))
+	_text(_content, tr("Type: %s   -   Theme: %s") % [str(e["genre"]).to_upper(), str(e["theme"]).to_upper()], 18, Color(1, 1, 1, 0.6))
 	for spec in [["PLAY SOLO", Color(0.2, 0.72, 0.35), "offline"], ["HOST ON WI-FI", Color(0.25, 0.5, 0.95), "host"]]:
 		var b := UiStyle.button(spec[0], spec[1])
 		var mode: String = spec[2]
@@ -532,11 +532,11 @@ func _best_text(exp_id: String) -> String:
 				parts.append("%s %s" % [course, _fmt_time(t) if t > 0.0 else "--"])
 			return "Your best:  " + "   ".join(parts)
 		"lava_rising":
-			return "Your best: %ds survived" % int(Game.best_scores.get("lava_rising", 0))
+			return tr("Your best: %ds survived") % int(Game.best_scores.get("lava_rising", 0))
 		"color_drop":
-			return "Your best: %d rounds" % int(Game.best_scores.get("color_drop", 0))
+			return tr("Your best: %d rounds") % int(Game.best_scores.get("color_drop", 0))
 		"obby_rush":
-			return "Your best: stage %d" % int(Game.best_scores.get("obby_rush", 0))
+			return tr("Your best: stage %d") % int(Game.best_scores.get("obby_rush", 0))
 	return ""
 
 
@@ -559,10 +559,10 @@ func _build_avatar() -> void:
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 12)
 	_content.add_child(top)
-	var wallet := _text(top, "Coins: %d" % Game.wallet(), 30, Color(1.0, 0.85, 0.3))
+	var wallet := _text(top, tr("Coins: %d") % Game.wallet(), 30, Color(1.0, 0.85, 0.3))
 	wallet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if Game.daily_available():
-		var daily := UiStyle.button("DAILY REWARD +%d" % Game.DAILY_REWARD, Color(0.95, 0.6, 0.15), 18, 52)
+		var daily := UiStyle.button(tr("DAILY REWARD +%d") % Game.DAILY_REWARD, Color(0.95, 0.6, 0.15), 18, 52)
 		daily.pressed.connect(_claim_daily)
 		top.add_child(daily)
 
@@ -592,7 +592,7 @@ func _shop_item(it: Dictionary) -> Control:
 	var owned := Game.owns(id)
 	var worn: bool = Game.equipped.get(it["slot"], "") == id
 	var col: Color = it["color"]
-	var label := "%s\n%s" % [it["name"], "WEARING" if worn else ("OWNED - tap to wear" if owned else "%d coins" % it["price"])]
+	var label := "%s\n%s" % [it["name"], tr("WEARING") if worn else (tr("OWNED - tap to wear") if owned else tr("%d coins") % it["price"])]
 	var base := Color(0.2, 0.55, 0.3) if worn else (Color(0.25, 0.3, 0.48) if owned else Color(0.18, 0.2, 0.3))
 	var b := UiStyle.button(label, base, 17, 86)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -614,7 +614,7 @@ func _shop_press(id: String) -> void:
 			Sfx.play("hit")
 			return
 		Sfx.play("win")
-		show_status("You bought %s!" % AvatarItems.get_item(id)["name"])
+		show_status(tr("You bought %s!") % AvatarItems.get_item(id)["name"])
 	if Backend.online:
 		Backend.push_progress()
 	profile_changed.emit()
@@ -626,7 +626,7 @@ func _claim_daily() -> void:
 	var got := Game.claim_daily()
 	if got > 0:
 		Sfx.play("coin")
-		show_status("Daily reward: +%d coins!" % got)
+		show_status(tr("Daily reward: +%d coins!") % got)
 		if Backend.online:
 			Backend.push_progress()
 	_refresh_account()
@@ -704,6 +704,63 @@ func _refresh_swatches(key: String) -> void:
 
 func _build_settings() -> void:
 	var c := _content
+	_text(c, "Language", 24, Color(1.0, 0.85, 0.3))
+	var lang_row := HBoxContainer.new()
+	lang_row.add_theme_constant_override("separation", 8)
+	c.add_child(lang_row)
+	for spec in [["English", "en"], ["العربية", "ar"]]:
+		var code: String = spec[1]
+		var lb := UiStyle.button(spec[0], Color(0.95, 0.55, 0.2) if Game.language == code else Color(0.25, 0.3, 0.48), 20, 52)
+		lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lb.pressed.connect(func() -> void: _set_setting("language", code))
+		lang_row.add_child(lb)
+
+	_text(c, "Camera sensitivity", 22)
+	var sens := HSlider.new()
+	sens.min_value = 0.3
+	sens.max_value = 2.5
+	sens.step = 0.05
+	sens.value = Game.sensitivity
+	sens.custom_minimum_size.y = 40
+	sens.value_changed.connect(func(v: float) -> void: _set_setting("sensitivity", v))
+	c.add_child(sens)
+
+	_text(c, "Sound volume", 22)
+	var vol := HSlider.new()
+	vol.min_value = 0.0
+	vol.max_value = 1.0
+	vol.step = 0.05
+	vol.value = Game.volume
+	vol.custom_minimum_size.y = 40
+	vol.value_changed.connect(func(v: float) -> void: _set_setting("volume", v))
+	c.add_child(vol)
+
+	_text(c, "Graphics", 22)
+	var gfx_row := HBoxContainer.new()
+	gfx_row.add_theme_constant_override("separation", 8)
+	c.add_child(gfx_row)
+	for q in ["low", "medium", "high"]:
+		var quality: String = q
+		var gb := UiStyle.button(q.to_upper(), Color(0.95, 0.55, 0.2) if Game.graphics == q else Color(0.25, 0.3, 0.48), 18, 50)
+		gb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		gb.pressed.connect(func() -> void: _set_setting("graphics", quality))
+		gfx_row.add_child(gb)
+
+	var fps := CheckButton.new()
+	fps.text = "Show FPS"
+	fps.button_pressed = Game.show_fps
+	fps.add_theme_font_size_override("font_size", 22)
+	fps.toggled.connect(func(on: bool) -> void: _set_setting("show_fps", on))
+	c.add_child(fps)
+
+	var chat := CheckButton.new()
+	chat.text = "Chat with other players"
+	chat.button_pressed = Game.chat_enabled
+	chat.add_theme_font_size_override("font_size", 22)
+	chat.toggled.connect(func(on: bool) -> void: _set_setting("chat_enabled", on))
+	c.add_child(chat)
+
+	_text(c, "Account", 24, Color(1.0, 0.85, 0.3))
 	_text(c, "Account server (Nakama) - enables accounts, friends, cloud save, world records and online play. Leave empty to play as a guest.", 20, Color(1, 1, 1, 0.8))
 	var url := UiStyle.line_edit("http://YOUR-SERVER-IP:7350", 24)
 	url.text = Game.backend_url
@@ -724,6 +781,15 @@ func _build_settings() -> void:
 	row.add_child(out)
 	save.pressed.connect(func() -> void: _save_settings(url.text, key.text, status))
 	out.pressed.connect(func() -> void: _save_settings("", key.text, status))
+
+
+func _set_setting(key: String, value: Variant) -> void:
+	Game.set(key, value)
+	Game.apply_settings()
+	Game.save_profile()
+	if key == "language" or key == "graphics":
+		_refresh_account()
+		open_tab("SETTINGS")
 
 
 func _save_settings(url_text: String, key_text: String, status: Label) -> void:
