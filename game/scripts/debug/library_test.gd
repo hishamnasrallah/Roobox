@@ -13,9 +13,30 @@ func _check(ok: bool, what: String, detail: Variant = "") -> void:
 		_fails.append(what)
 
 
+func _positions(lvl: Dictionary) -> Dictionary:
+	var out := {}
+	for p: Dictionary in lvl["parts"]:
+		var v := Level.pos(p).snapped(Vector3.ONE)
+		out["%d|%d|%d" % [int(v.x), int(v.y), int(v.z)]] = true
+	return out
+
+
 func _ready() -> void:
 	var games := GameLibrary.all()
-	_check(games.size() == GameLibrary.count() and games.size() >= 200, "at least 200 games", games.size())
+	_check(games.size() == GameLibrary.count() and games.size() >= 280, "at least 280 games", games.size())
+	_check(GameLibrary.GENRES.size() >= 18, "at least 18 game types", GameLibrary.GENRES.size())
+	# The two layouts of every game type must really be different maps.
+	for g: Dictionary in GameLibrary.GENRES:
+		var la := GameLibrary.generate("g:%s:%s" % [g["id"], GameLibrary.THEMES[0]["id"]])
+		var lb := GameLibrary.generate("g:%s:%s" % [g["id"], GameLibrary.THEMES[1]["id"]])
+		var pa := _positions(la)
+		var pb := _positions(lb)
+		var same := 0
+		for k: String in pa:
+			if pb.has(k):
+				same += 1
+		var ratio := float(same) / maxf(1.0, float(mini(pa.size(), pb.size())))
+		_check(ratio < 0.5, "layouts A and B differ", [g["id"], ratio])
 	var titles := {}
 	var total_parts := 0
 	var max_parts := 0
@@ -38,8 +59,14 @@ func _ready() -> void:
 			_check(err == "", "script compiles", [e["id"], err])
 		var again := GameLibrary.generate(e["id"])
 		_check(JSON.stringify(again) == JSON.stringify(lvl), "generation is deterministic", e["id"])
-		if not built.has(e["genre"]):
-			built[e["genre"]] = true
+		var bkey := "%s/%d" % [e["genre"], int(e["variant"])]
+		if not built.has(bkey):
+			built[bkey] = true
+			var proot := Node3D.new()
+			add_child(proot)
+			var shot := LevelPreview.build(proot, lvl)
+			_check(proot.get_child_count() > 0 and (shot["eye"] as Vector3).is_finite(), "thumbnail preview builds", e["id"])
+			proot.queue_free()
 			var root := Node3D.new()
 			add_child(root)
 			var reg := Level.build_play(root, lvl)
@@ -52,7 +79,8 @@ func _ready() -> void:
 				_check(host.last_error == "", "script starts", [e["id"], host.last_error])
 				host.queue_free()
 			root.queue_free()
-	print("LIBRARYTEST games=%d genres_built=%d avg_parts=%d max_parts=%d" % [
+	_check(built.size() == GameLibrary.GENRES.size() * 2, "every layout was built", built.size())
+	print("LIBRARYTEST games=%d layouts_built=%d avg_parts=%d max_parts=%d" % [
 		games.size(), built.size(), total_parts / maxi(games.size(), 1), max_parts])
 	if _fails.is_empty():
 		print("LIBRARYTEST PASS")

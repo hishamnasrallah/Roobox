@@ -313,6 +313,7 @@ func _start_game(exp_id: String) -> void:
 		return
 	_in_game = true
 	_clear_menu()
+	Thumbs.cancel_all()
 
 	experience = Catalog.create(exp_id)
 	add_child(experience)

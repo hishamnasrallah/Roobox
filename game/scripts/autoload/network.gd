@@ -222,13 +222,13 @@ func send_mode_event(ev: Dictionary, reliable: bool = true) -> void:
 ## Client -> authority: "I touched this named part" (UGC scripts).
 func send_script_touch(part_name: String) -> void:
 	if mode == "client":
-		_script_touch.rpc_id(1, part_name.substr(0, 24))
+		_script_touch.rpc_id(1, part_name.substr(0, 32))
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func _script_touch(part_name: String) -> void:
 	if is_server():
-		script_touched.emit(multiplayer.get_remote_sender_id(), part_name.substr(0, 24))
+		script_touched.emit(multiplayer.get_remote_sender_id(), part_name.substr(0, 32))
 
 
 @rpc("authority", "call_remote", "reliable")

@@ -14,9 +14,20 @@ const TAP_MOVE := 18.0
 
 ## A quick touch on the right side (camera area) that didn't drag.
 signal tapped(screen_pos: Vector2)
+## Two-finger drag (Studio camera pan), in pixels.
+signal panned(delta: Vector2)
 
 ## Studio hides the jump button.
 var show_jump: bool = true
+## Studio has no joystick: one finger orbits/taps anywhere, two fingers
+## pinch to zoom and drag to pan.
+var joystick_enabled: bool = true
+## Optional "grab" hooks (Studio transform handles):
+## grab_begin(pos) -> bool claims the touch; then grab_move(pos), grab_end().
+var grab_begin: Callable = Callable()
+var grab_move: Callable = Callable()
+var grab_end: Callable = Callable()
+var _grab_index: int = -1
 ## UI panels where touches must not start joystick/camera input.
 var blockers: Array[Control] = []
 var _look_start: Vector2 = Vector2.ZERO
@@ -57,6 +68,9 @@ func _joy_home() -> Vector2:
 
 
 func release_all() -> void:
+	if _grab_index != -1 and grab_end.is_valid():
+		grab_end.call()
+	_grab_index = -1
 	_joy_index = -1
 	_jump_index = -1
 	_look_index = -1
@@ -88,11 +102,14 @@ func _on_touch(t: InputEventScreenTouch) -> void:
 			if is_instance_valid(c) and c.is_visible_in_tree() and c.get_global_rect().has_point(t.position):
 				return
 		_touch_pos[t.index] = t.position
+		if _grab_index == -1 and _look_index == -1 and grab_begin.is_valid() and bool(grab_begin.call(t.position)):
+			_grab_index = t.index
+			return
 		if show_jump and _jump_index == -1 and t.position.distance_to(_jump_center()) < JUMP_RADIUS * 1.3:
 			_jump_index = t.index
 			Game.touch_jump_held = true
 			Game.press_jump()
-		elif _joy_index == -1 and t.position.x < _screen().x * 0.45:
+		elif joystick_enabled and _joy_index == -1 and t.position.x < _screen().x * 0.45:
 			_joy_index = t.index
 			_joy_center = t.position
 			_joy_knob = t.position
@@ -105,7 +122,11 @@ func _on_touch(t: InputEventScreenTouch) -> void:
 			_pinch_index = t.index
 	else:
 		_touch_pos.erase(t.index)
-		if t.index == _joy_index:
+		if t.index == _grab_index:
+			_grab_index = -1
+			if grab_end.is_valid():
+				grab_end.call()
+		elif t.index == _joy_index:
 			_joy_index = -1
 			Game.touch_move = Vector2.ZERO
 		elif t.index == _jump_index:
@@ -125,6 +146,10 @@ func _on_touch(t: InputEventScreenTouch) -> void:
 func _on_drag(d: InputEventScreenDrag) -> void:
 	var prev: Vector2 = _touch_pos.get(d.index, d.position)
 	_touch_pos[d.index] = d.position
+	if d.index == _grab_index:
+		if grab_move.is_valid():
+			grab_move.call(d.position)
+		return
 
 	if d.index == _joy_index:
 		var off := d.position - _joy_center
@@ -148,6 +173,7 @@ func _on_drag(d: InputEventScreenDrag) -> void:
 			var before := prev.distance_to(other)
 			var after := d.position.distance_to(other)
 			Game.add_zoom(-(after - before) * 0.03)
+			panned.emit((d.position - prev) * 0.5)
 		elif d.index == _look_index:
 			_look_moved += (d.position - prev).length()
 			Game.add_look_touch(d.position - prev)
@@ -155,6 +181,8 @@ func _on_drag(d: InputEventScreenDrag) -> void:
 
 func _draw() -> void:
 	var white := Color(1, 1, 1)
+	if not joystick_enabled:
+		return
 
 	# Joystick.
 	var active := _joy_index != -1

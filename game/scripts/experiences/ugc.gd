@@ -47,7 +47,7 @@ func part_names() -> Array:
 
 
 func part_position(n: String) -> Vector3:
-	var nodes: Array = (registry.get("by_name", {}) as Dictionary).get(n, [])
+	var nodes: Array = _nodes_for(n)
 	for node in nodes:
 		if is_instance_valid(node):
 			return (node as Node3D).global_position
@@ -80,7 +80,8 @@ func _add_touch_areas() -> void:
 			cs.shape = box
 			area.add_child(cs)
 			node.add_child(area)
-			area.body_entered.connect(_on_area_entered.bind(n))
+			var token := "%s#%d" % [n, int(node.get_meta("part_index", -1))]
+			area.body_entered.connect(_on_area_entered.bind(token))
 
 
 func _on_area_entered(body: Node3D, n: String) -> void:
@@ -138,9 +139,19 @@ func _refresh_status() -> void:
 	set_status("   -   ".join(parts), Color(1.0, 0.85, 0.3))
 
 
+## Nodes for "name" (every part with that name) or "name#index" (one part).
+func _nodes_for(n: String) -> Array:
+	if n.contains("#"):
+		var node: Variant = (registry.get("by_index", {}) as Dictionary).get(int(n.get_slice("#", 1)))
+		if node != null and is_instance_valid(node) and (node as Node).get_meta("part_name", "") == n.get_slice("#", 0):
+			return [node]
+		return []
+	return (registry.get("by_name", {}) as Dictionary).get(n, [])
+
+
 func _world_op(n: String, op: String, a: Array) -> void:
+	var nodes: Array = _nodes_for(n)
 	var byn: Dictionary = registry.get("by_name", {})
-	var nodes: Array = byn.get(n, [])
 	for node in nodes.duplicate():
 		if not is_instance_valid(node):
 			continue
@@ -167,7 +178,7 @@ func _world_op(n: String, op: String, a: Array) -> void:
 					body.global_position = target
 			"destroy":
 				body.queue_free()
-				nodes.erase(node)
+				(byn.get(n.get_slice("#", 0), []) as Array).erase(node)
 
 
 func _player_op(op: String, a: Array) -> void:

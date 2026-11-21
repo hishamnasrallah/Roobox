@@ -4,6 +4,12 @@ extends RefCounted
 ## UGC experience. A level is plain JSON-friendly data:
 ##   {v, name, parts: [{t, p:[x,y,z], s:[x,y,z], r:0..3, c:color_index}]}
 ## p = center, s = size (before rotation), r = yaw in 90 degree steps.
+## Optional part keys:
+##   ry  yaw in degrees (any angle; overrides r)    n   name (for scripts)
+##   m   motion preset    mat material    txt sign text
+##   a   transparency 0..0.75     nc  1 = can't collide (walk through)
+##   u   1 = unanchored (falls / can be pushed by physics)
+##   k   1 = locked in the editor  g   group id (editor selects the group)
 
 const VERSION := 1
 const MAX_PARTS := 2500
@@ -15,41 +21,51 @@ const COLORS: Array[Color] = [
 	Color(0.3, 0.6, 1.0), Color(0.65, 0.45, 1.0), Color(1.0, 0.45, 0.75), Color(0.97, 0.97, 1.0),
 ]
 
-## Toolbox presets: {id, label, t (type), s (size), c (default color)}.
+## Toolbox presets: {id, label, t (type), s (size), c (default color), cat}.
+## cat = palette tab in Studio: "parts", "game", "nature", "fx".
 const PRESETS: Array[Dictionary] = [
-	{"id": "cube", "label": "CUBE", "t": "block", "s": [1, 1, 1], "c": 2},
-	{"id": "block", "label": "BLOCK", "t": "block", "s": [2, 2, 2], "c": 4},
-	{"id": "half", "label": "HALF", "t": "block", "s": [2, 1, 2], "c": 0},
-	{"id": "plate", "label": "PLATE", "t": "block", "s": [4, 1, 4], "c": 8},
-	{"id": "floor", "label": "FLOOR", "t": "block", "s": [8, 1, 8], "c": 2},
-	{"id": "beam", "label": "BEAM", "t": "block", "s": [1, 1, 6], "c": 5},
-	{"id": "wall", "label": "WALL", "t": "block", "s": [6, 4, 1], "c": 11},
-	{"id": "pillar", "label": "PILLAR", "t": "block", "s": [1, 6, 1], "c": 0},
-	{"id": "ramp", "label": "RAMP", "t": "ramp", "s": [4, 2, 2], "c": 6},
-	{"id": "stairs", "label": "STAIRS", "t": "stairs", "s": [2, 2, 4], "c": 0},
-	{"id": "cone", "label": "CONE", "t": "cone", "s": [2, 2, 2], "c": 5},
-	{"id": "ball", "label": "BALL", "t": "ball", "s": [2, 2, 2], "c": 9},
-	{"id": "cyl", "label": "ROUND", "t": "cyl", "s": [2, 2, 2], "c": 10},
-	{"id": "spawn", "label": "SPAWN", "t": "spawn", "s": [4, 1, 4], "c": 8},
-	{"id": "checkpoint", "label": "CHECKPOINT", "t": "checkpoint", "s": [4, 1, 4], "c": 7},
-	{"id": "kill", "label": "LAVA", "t": "kill", "s": [2, 1, 2], "c": 4},
-	{"id": "spikes", "label": "SPIKES", "t": "spikes", "s": [2, 1, 2], "c": 1},
-	{"id": "jumppad", "label": "JUMP PAD", "t": "jumppad", "s": [3, 1, 3], "c": 8},
-	{"id": "speed", "label": "SPEED PAD", "t": "speed", "s": [3, 1, 3], "c": 6},
-	{"id": "conveyor", "label": "CONVEYOR", "t": "conveyor", "s": [2, 1, 6], "c": 1},
-	{"id": "teleport", "label": "TELEPORT", "t": "teleport", "s": [3, 1, 3], "c": 9},
-	{"id": "water", "label": "WATER", "t": "water", "s": [4, 4, 4], "c": 8},
-	{"id": "ladder", "label": "LADDER", "t": "ladder", "s": [2, 6, 1], "c": 3},
-	{"id": "coin", "label": "COIN", "t": "coin", "s": [1, 1, 1], "c": 6},
-	{"id": "light", "label": "LIGHT", "t": "light", "s": [1, 1, 1], "c": 6},
-	{"id": "sign", "label": "SIGN", "t": "sign", "s": [4, 2, 1], "c": 3},
-	{"id": "tree", "label": "TREE", "t": "tree", "s": [3, 6, 3], "c": 7},
-	{"id": "finish", "label": "FINISH", "t": "finish", "s": [4, 1, 4], "c": 6},
+	{"id": "cube", "label": "CUBE", "t": "block", "s": [1, 1, 1], "c": 2, "cat": "parts"},
+	{"id": "block", "label": "BLOCK", "t": "block", "s": [2, 2, 2], "c": 4, "cat": "parts"},
+	{"id": "half", "label": "HALF", "t": "block", "s": [2, 1, 2], "c": 0, "cat": "parts"},
+	{"id": "plate", "label": "PLATE", "t": "block", "s": [4, 1, 4], "c": 8, "cat": "parts"},
+	{"id": "floor", "label": "FLOOR", "t": "block", "s": [8, 1, 8], "c": 2, "cat": "parts"},
+	{"id": "beam", "label": "BEAM", "t": "block", "s": [1, 1, 6], "c": 5, "cat": "parts"},
+	{"id": "wall", "label": "WALL", "t": "block", "s": [6, 4, 1], "c": 11, "cat": "parts"},
+	{"id": "pillar", "label": "PILLAR", "t": "block", "s": [1, 6, 1], "c": 0, "cat": "parts"},
+	{"id": "ramp", "label": "WEDGE", "t": "ramp", "s": [4, 2, 2], "c": 6, "cat": "parts"},
+	{"id": "corner", "label": "CORNER", "t": "corner", "s": [2, 2, 2], "c": 5, "cat": "parts"},
+	{"id": "stairs", "label": "STAIRS", "t": "stairs", "s": [2, 2, 4], "c": 0, "cat": "parts"},
+	{"id": "cone", "label": "CONE", "t": "cone", "s": [2, 2, 2], "c": 5, "cat": "parts"},
+	{"id": "ball", "label": "BALL", "t": "ball", "s": [2, 2, 2], "c": 9, "cat": "parts"},
+	{"id": "cyl", "label": "ROUND", "t": "cyl", "s": [2, 2, 2], "c": 10, "cat": "parts"},
+	{"id": "truss", "label": "TRUSS", "t": "truss", "s": [2, 6, 2], "c": 1, "cat": "parts"},
+	{"id": "spawn", "label": "SPAWN", "t": "spawn", "s": [4, 1, 4], "c": 8, "cat": "game"},
+	{"id": "checkpoint", "label": "CHECKPOINT", "t": "checkpoint", "s": [4, 1, 4], "c": 7, "cat": "game"},
+	{"id": "finish", "label": "FINISH", "t": "finish", "s": [4, 1, 4], "c": 6, "cat": "game"},
+	{"id": "kill", "label": "LAVA", "t": "kill", "s": [2, 1, 2], "c": 4, "cat": "game"},
+	{"id": "spikes", "label": "SPIKES", "t": "spikes", "s": [2, 1, 2], "c": 1, "cat": "game"},
+	{"id": "jumppad", "label": "JUMP PAD", "t": "jumppad", "s": [3, 1, 3], "c": 8, "cat": "game"},
+	{"id": "speed", "label": "SPEED PAD", "t": "speed", "s": [3, 1, 3], "c": 6, "cat": "game"},
+	{"id": "conveyor", "label": "CONVEYOR", "t": "conveyor", "s": [2, 1, 6], "c": 1, "cat": "game"},
+	{"id": "teleport", "label": "TELEPORT", "t": "teleport", "s": [3, 1, 3], "c": 9, "cat": "game"},
+	{"id": "coin", "label": "COIN", "t": "coin", "s": [1, 1, 1], "c": 6, "cat": "game"},
+	{"id": "ladder", "label": "LADDER", "t": "ladder", "s": [2, 6, 1], "c": 3, "cat": "game"},
+	{"id": "water", "label": "WATER", "t": "water", "s": [4, 4, 4], "c": 8, "cat": "nature"},
+	{"id": "tree", "label": "TREE", "t": "tree", "s": [3, 6, 3], "c": 7, "cat": "nature"},
+	{"id": "sign", "label": "SIGN", "t": "sign", "s": [4, 2, 1], "c": 3, "cat": "nature"},
+	{"id": "light", "label": "LIGHT", "t": "light", "s": [1, 1, 1], "c": 6, "cat": "fx"},
+	{"id": "fire", "label": "FIRE", "t": "fire", "s": [2, 2, 2], "c": 5, "cat": "fx"},
+	{"id": "smoke", "label": "SMOKE", "t": "smoke", "s": [2, 2, 2], "c": 1, "cat": "fx"},
+	{"id": "sparkles", "label": "SPARKLES", "t": "sparkles", "s": [2, 2, 2], "c": 6, "cat": "fx"},
 ]
 
 const SPECIAL := ["spawn", "checkpoint", "kill", "jumppad", "coin", "finish", "spikes", "speed",
-	"conveyor", "teleport", "water", "ladder", "light", "sign", "tree"]
-const SOLID := ["block", "ramp", "ball", "cyl", "stairs", "cone"]
+	"conveyor", "teleport", "water", "ladder", "light", "sign", "tree", "truss", "fire", "smoke", "sparkles"]
+const SOLID := ["block", "ramp", "ball", "cyl", "stairs", "cone", "corner"]
+## Decorative particle emitters (no collision).
+const EFFECTS := ["fire", "smoke", "sparkles"]
+## Transparency steps for the "a" property.
+const ALPHAS: Array[float] = [0.0, 0.25, 0.5, 0.75]
 const ENVS: Array[String] = ["day", "sunset", "night", "space", "fog"]
 const MAX_LIGHTS := 24
 
@@ -131,6 +147,23 @@ static func _clean_part(item: Dictionary) -> Dictionary:
 		out["mat"] = mat
 	if t == "sign":
 		out["txt"] = str(item.get("txt", "Hello!")).strip_edges().substr(0, 60)
+	if item.has("ry"):
+		var ry := fposmod(float(item["ry"]), 360.0)
+		if is_finite(ry) and absf(ry) > 0.01:
+			out["ry"] = snappedf(ry, 0.1)
+			out["r"] = 0
+	var alpha := clampf(float(item.get("a", 0.0)), 0.0, 0.75)
+	if alpha > 0.01 and t in SOLID:
+		out["a"] = snappedf(alpha, 0.05)
+	if int(item.get("nc", 0)) == 1 and t in SOLID:
+		out["nc"] = 1
+	if int(item.get("u", 0)) == 1 and t in SOLID and not out.has("m"):
+		out["u"] = 1
+	if int(item.get("k", 0)) == 1:
+		out["k"] = 1
+	var g := clean_name(str(item.get("g", "")))
+	if g != "":
+		out["g"] = g
 	return out
 
 
@@ -163,12 +196,42 @@ static func size(part: Dictionary) -> Vector3:
 
 
 static func yaw(part: Dictionary) -> float:
-	return int(part.get("r", 0)) * PI * 0.5
+	return deg_to_rad(yaw_deg(part))
+
+
+static func yaw_deg(part: Dictionary) -> float:
+	if part.has("ry"):
+		return float(part["ry"])
+	return int(part.get("r", 0)) * 90.0
+
+
+## Stores a yaw: multiples of 90 use r (old format), others use ry.
+static func set_yaw_deg(part: Dictionary, deg: float) -> void:
+	var d := fposmod(snappedf(deg, 0.1), 360.0)
+	if is_equal_approx(fposmod(d, 90.0), 0.0) or is_equal_approx(fposmod(d, 90.0), 90.0):
+		part["r"] = int(roundf(d / 90.0)) % 4
+		part.erase("ry")
+	else:
+		part["r"] = 0
+		part["ry"] = d
+
+
+## True when a part needs its own body in play (not batched).
+static func is_dynamic(p: Dictionary) -> bool:
+	return p.has("m") or p.has("n") or p.has("a") or p.has("nc") or p.has("u")
 
 
 ## Size along world axes after rotation (x/z swap for 90/270 degrees).
 static func world_size(s: Vector3, r: int) -> Vector3:
 	return Vector3(s.z, s.y, s.x) if r % 2 == 1 else s
+
+
+## World-space bounding box of a part (handles any yaw).
+static func part_aabb(part: Dictionary) -> AABB:
+	var s := size(part)
+	var b := Basis(Vector3.UP, yaw(part))
+	var ext := (b.x * s.x * 0.5).abs() + (b.y * s.y * 0.5).abs() + (b.z * s.z * 0.5).abs()
+	return AABB(pos(part) - ext, ext * 2.0)
 
 
 static func spawn_point(level: Dictionary) -> Vector3:
@@ -180,8 +243,8 @@ static func spawn_point(level: Dictionary) -> Vector3:
 
 
 ## Snap a center coordinate so the part edges sit on the grid.
-static func snap_center(v: float, s: float) -> float:
-	return roundf((v - s * 0.5) / GRID) * GRID + s * 0.5
+static func snap_center(v: float, s: float, grid: float = GRID) -> float:
+	return roundf((v - s * 0.5) / grid) * grid + s * 0.5
 
 
 static func part_shape(t: String) -> String:
@@ -192,6 +255,8 @@ static func part_shape(t: String) -> String:
 			return "ball"
 		"cone":
 			return "cone"
+		"corner":
+			return "corner"
 		"cyl", "checkpoint", "jumppad", "spawn", "finish":
 			return "cyl" if t == "cyl" else "box"
 	return "box"
@@ -215,9 +280,10 @@ static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 		var sz := size(p)
 		var rot := Vector3(0, yaw(p), 0)
 		var col: Color = COLORS[int(p["c"])]
-		if (t in SOLID or t == "kill") and (p.has("m") or p.has("n")):
+		if (t in SOLID or t == "kill") and is_dynamic(p):
 			var node := _dynamic_part(parent, b, p)
 			node.set_meta("part_index", i)
+			node.set_meta("part_name", str(p.get("n", "")))
 			(reg["by_index"] as Dictionary)[i] = node
 			if p.has("n"):
 				var byn: Dictionary = reg["by_name"]
@@ -227,8 +293,29 @@ static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 			continue
 		var mat: String = p.get("mat", "plastic")
 		match t:
-			"block", "ramp", "ball", "cyl", "cone":
+			"block", "ramp", "ball", "cyl", "cone", "corner":
 				b.part(part_shape(t), at, sz, mat_color(mat, col), true, mat_kind(mat, col), rot)
+			"truss":
+				truss_beams(b, at, sz, rot, col)
+				b.collider("box", at, sz, rot)
+				var tv := PartVolume.new()
+				tv.kind = "ladder"
+				tv.position = at
+				tv.rotation = rot
+				tv.setup(sz + Vector3(1.0, 0.4, 1.0))
+				parent.add_child(tv)
+			"fire", "smoke", "sparkles":
+				var fx := effect_node(t, col, sz)
+				fx.position = at
+				parent.add_child(fx)
+				if t == "fire" and lights < MAX_LIGHTS:
+					lights += 1
+					var fl := OmniLight3D.new()
+					fl.light_color = Color(1.0, 0.55, 0.2)
+					fl.light_energy = 1.6
+					fl.omni_range = 8.0
+					fl.position = at + Vector3(0, 0.5, 0)
+					parent.add_child(fl)
 			"stairs":
 				for st: Array in stair_steps(sz):
 					b.part("box", at + Basis.from_euler(rot) * (st[0] as Vector3), st[1], mat_color(mat, col), true, mat_kind(mat, col), rot)
@@ -376,7 +463,8 @@ static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 	return reg
 
 
-## A solid part as its own physics body (moving, spinning or scriptable).
+## A solid part as its own physics body (moving, spinning, scriptable,
+## see-through, walk-through or unanchored).
 static func _dynamic_part(parent: Node3D, b: WorldBuilder, p: Dictionary) -> Node3D:
 	var t: String = p["t"]
 	var sz := size(p)
@@ -394,17 +482,27 @@ static func _dynamic_part(parent: Node3D, b: WorldBuilder, p: Dictionary) -> Nod
 			sp.speed = 1.2 if m == "spin" else 3.0
 			body = sp
 		_:
-			var sb := StaticBody3D.new()
-			sb.collision_layer = 1
-			sb.collision_mask = 0
-			body = sb
+			if int(p.get("u", 0)) == 1:
+				var rb := RigidBody3D.new()
+				rb.collision_layer = 1
+				rb.collision_mask = 1 | 2
+				rb.mass = clampf(sz.x * sz.y * sz.z * 0.4, 0.5, 200.0)
+				body = rb
+			else:
+				var sb := StaticBody3D.new()
+				sb.collision_layer = 1
+				sb.collision_mask = 0
+				body = sb
+	if int(p.get("nc", 0)) == 1 and body is CollisionObject3D:
+		(body as CollisionObject3D).collision_layer = 0
+		(body as CollisionObject3D).collision_mask = 1 if body is RigidBody3D else 0
 	body.position = pos(p)
 	body.rotation.y = yaw(p)
 	var mi := MeshInstance3D.new()
 	mi.name = "Mesh"
 	mi.mesh = b.unit_mesh(shape)
 	mi.scale = sz
-	mi.material_override = Materials.material(str(p.get("mat", "plastic")), COLORS[int(p["c"])]) if p.get("mat", "plastic") != "plastic" else Fx.block_material(COLORS[int(p["c"])])
+	mi.material_override = part_material(p)
 	if t == "kill":
 		mi.material_override = Fx.glow_material(Color(1.0, 0.3, 0.1), 2.0)
 		var kz := KillZone.new()
@@ -417,6 +515,113 @@ static func _dynamic_part(parent: Node3D, b: WorldBuilder, p: Dictionary) -> Nod
 	body.add_child(cs)
 	parent.add_child(body)
 	return body
+
+
+## Material for a single (non-batched) solid part, including transparency.
+static func part_material(p: Dictionary) -> StandardMaterial3D:
+	var mat := str(p.get("mat", "plastic"))
+	var col: Color = COLORS[clampi(int(p.get("c", 0)), 0, COLORS.size() - 1)]
+	var m: StandardMaterial3D = Materials.material(mat, col) if mat != "plastic" else Fx.block_material(col)
+	var alpha := float(p.get("a", 0.0))
+	if alpha > 0.01:
+		m = m.duplicate() as StandardMaterial3D
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_color.a = 1.0 - alpha
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return m
+
+
+## Truss lattice (4 posts, rings and braces) drawn through a WorldBuilder.
+static func truss_beams(b: WorldBuilder, at: Vector3, sz: Vector3, rot: Vector3, col: Color) -> void:
+	var basis := Basis.from_euler(rot)
+	var t := 0.18
+	var hx := sz.x * 0.5 - t * 0.5
+	var hz := sz.z * 0.5 - t * 0.5
+	var kind := "mat:metal"
+	var tint := col.lerp(Color.WHITE, 0.4)
+	for sx in [-1.0, 1.0]:
+		for sz2 in [-1.0, 1.0]:
+			b.part("box", at + basis * Vector3(sx * hx, 0, sz2 * hz), Vector3(t, sz.y, t), tint, false, kind, rot)
+	var rings := maxi(int(roundf(sz.y / 2.0)), 1)
+	for i in rings + 1:
+		var y := -sz.y * 0.5 + sz.y * i / rings
+		y = clampf(y, -sz.y * 0.5 + t * 0.5, sz.y * 0.5 - t * 0.5)
+		for sx in [-1.0, 1.0]:
+			b.part("box", at + basis * Vector3(sx * hx, y, 0), Vector3(t, t, sz.z), tint, false, kind, rot)
+		for sz2 in [-1.0, 1.0]:
+			b.part("box", at + basis * Vector3(0, y, sz2 * hz), Vector3(sz.x, t, t), tint, false, kind, rot)
+		if i < rings:
+			var ym := y + sz.y / rings * 0.5
+			b.part("box", at + basis * Vector3(0, ym, -hz), Vector3(sz.x, t, t), tint, false, kind, rot)
+			b.part("box", at + basis * Vector3(hx, ym, 0), Vector3(t, t, sz.z), tint, false, kind, rot)
+
+
+## Particle emitter for fire / smoke / sparkles parts.
+static func effect_node(kind: String, col: Color, sz: Vector3) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	var quad := QuadMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(sz.x * 0.35, 0.1, sz.z * 0.35)
+	p.position = Vector3(0, -sz.y * 0.4, 0)
+	var grad := Gradient.new()
+	var curve := Curve.new()
+	match kind:
+		"fire":
+			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			quad.size = Vector2(0.7, 0.7) * clampf(sz.x * 0.5, 0.5, 3.0)
+			p.amount = 28
+			p.lifetime = 0.9
+			p.direction = Vector3.UP
+			p.spread = 12.0
+			p.gravity = Vector3(0, 2.5, 0)
+			p.initial_velocity_min = sz.y * 0.8
+			p.initial_velocity_max = sz.y * 1.4
+			grad.set_color(0, Color(1.0, 0.85, 0.3, 1.0))
+			grad.set_color(1, Color(0.9, 0.15, 0.05, 0.0))
+			grad.add_point(0.4, Color(1.0, 0.45, 0.1, 0.9))
+			curve.add_point(Vector2(0, 1.0))
+			curve.add_point(Vector2(1, 0.2))
+		"smoke":
+			quad.size = Vector2(1.2, 1.2) * clampf(sz.x * 0.5, 0.5, 3.0)
+			p.amount = 16
+			p.lifetime = 3.0
+			p.direction = Vector3.UP
+			p.spread = 18.0
+			p.gravity = Vector3(0.3, 0.6, 0)
+			p.initial_velocity_min = 0.6
+			p.initial_velocity_max = 1.2
+			var c0 := col.lerp(Color(0.5, 0.5, 0.52), 0.6)
+			grad.set_color(0, Color(c0, 0.55))
+			grad.set_color(1, Color(c0.lightened(0.3), 0.0))
+			curve.add_point(Vector2(0, 0.5))
+			curve.add_point(Vector2(1, 1.6))
+		_:
+			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			quad.size = Vector2(0.18, 0.18)
+			p.amount = 30
+			p.lifetime = 1.4
+			p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+			p.emission_sphere_radius = maxf(sz.x, sz.z) * 0.45
+			p.position = Vector3.ZERO
+			p.direction = Vector3.UP
+			p.spread = 180.0
+			p.gravity = Vector3(0, -0.4, 0)
+			p.initial_velocity_min = 0.3
+			p.initial_velocity_max = 1.0
+			grad.set_color(0, Color(col.lightened(0.5), 1.0))
+			grad.set_color(1, Color(col, 0.0))
+			curve.add_point(Vector2(0, 1.0))
+			curve.add_point(Vector2(1, 0.3))
+	quad.material = mat
+	p.mesh = quad
+	p.color_ramp = grad
+	p.scale_amount_curve = curve
+	return p
 
 
 ## Batch kind for a material (WorldBuilder).

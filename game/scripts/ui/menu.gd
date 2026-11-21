@@ -18,8 +18,11 @@ var _lib_genre: String = ""
 var _lib_query: String = ""
 var _lib_shown: int = 24
 var _lib_grid: GridContainer
+var _lib_rows: VBoxContainer
+var _chips: Dictionary = {}
 var _lib_more: Button
 var _lib_count: Label
+var _scroll: ScrollContainer
 
 
 func _ready() -> void:
@@ -78,9 +81,9 @@ func _ready() -> void:
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
 	vb.add_child(panel)
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var scroll := TouchScroll.make(false)
 	panel.add_child(scroll)
+	_scroll = scroll
 	_content = VBoxContainer.new()
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_content.add_theme_constant_override("separation", 12)
@@ -107,6 +110,8 @@ func open_tab(t: String) -> void:
 		ch.queue_free()
 	_busy_buttons.clear()
 	_swatch_rows.clear()
+	if _scroll != null:
+		_scroll.scroll_vertical = 0
 	match t:
 		"PLAY":
 			_build_discover()
@@ -224,27 +229,33 @@ func _build_library() -> void:
 	var t := _text(head, "Game library", 34, Color(1.0, 0.85, 0.3))
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lib_count = _text(head, "", 18, Color(1, 1, 1, 0.7))
+	_text(_content, "%d game types, each with 2 different maps and 3 difficulty levels." % GameLibrary.GENRES.size(), 16, Color(1, 1, 1, 0.6))
 	var search := UiStyle.line_edit("Search games...", 22)
 	search.text = _lib_query
 	search.text_changed.connect(_on_lib_search)
 	_content.add_child(search)
-	var chips_scroll := ScrollContainer.new()
-	chips_scroll.custom_minimum_size.y = 56
-	chips_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var chips_scroll := TouchScroll.make(true)
+	chips_scroll.custom_minimum_size.y = 54
 	_content.add_child(chips_scroll)
 	var chips := HBoxContainer.new()
 	chips.add_theme_constant_override("separation", 6)
 	chips_scroll.add_child(chips)
+	_chips.clear()
 	var all_genres: Array = [{"id": "", "title": "ALL"}]
 	all_genres.append_array(GameLibrary.GENRES)
 	for g: Dictionary in all_genres:
 		var gid: String = g["id"]
 		var on := gid == _lib_genre
 		var col: Color = GameLibrary.GENRE_COLORS.get(gid, Color(0.4, 0.45, 0.6))
-		var chip := UiStyle.button(str(g["title"]).to_upper(), col.darkened(0.1) if on else Color(0.22, 0.26, 0.4), 15, 46)
+		var chip := UiStyle.button(tr(str(g["title"])).to_upper(), col.darkened(0.1) if on else Color(0.22, 0.26, 0.4), 15, 46)
 		chip.custom_minimum_size.x = 90
-		chip.pressed.connect(func() -> void: _set_lib_genre(gid))
+		chip.focus_mode = Control.FOCUS_NONE
+		chip.pressed.connect(_set_lib_genre.bind(gid))
 		chips.add_child(chip)
+		_chips[gid] = chip
+	_lib_rows = VBoxContainer.new()
+	_lib_rows.add_theme_constant_override("separation", 10)
+	_content.add_child(_lib_rows)
 	_lib_grid = GridContainer.new()
 	_lib_grid.columns = 3
 	_lib_grid.add_theme_constant_override("h_separation", 10)
@@ -270,7 +281,13 @@ func _on_lib_search(t: String) -> void:
 func _set_lib_genre(gid: String) -> void:
 	_lib_genre = gid
 	_lib_shown = 24
-	open_tab("PLAY")
+	for k: String in _chips:
+		var chip: Button = _chips[k]
+		if not is_instance_valid(chip):
+			continue
+		var col: Color = GameLibrary.GENRE_COLORS.get(k, Color(0.4, 0.45, 0.6))
+		chip.add_theme_stylebox_override("normal", UiStyle.box(col.darkened(0.1) if k == gid else Color(0.22, 0.26, 0.4), 18, 10))
+	_refresh_library()
 
 
 func _refresh_library() -> void:
@@ -278,30 +295,99 @@ func _refresh_library() -> void:
 		return
 	for ch in _lib_grid.get_children():
 		ch.queue_free()
+	for ch in _lib_rows.get_children():
+		ch.queue_free()
+	var all := GameLibrary.all()
+	if _lib_genre == "" and _lib_query == "":
+		# Home view: one sideways row per game type.
+		_lib_count.text = tr("%d games") % all.size()
+		_lib_more.visible = false
+		for g: Dictionary in GameLibrary.GENRES:
+			_lib_row(g, all)
+		return
 	var matches: Array = []
-	for e: Dictionary in GameLibrary.all():
+	for e: Dictionary in all:
 		if _lib_genre != "" and e["genre"] != _lib_genre:
 			continue
-		if _lib_query != "" and not str(e["title"]).to_lower().contains(_lib_query):
+		if _lib_query != "" and not (str(e["title"]).to_lower().contains(_lib_query) or str(e["layout"]).to_lower().contains(_lib_query)):
 			continue
 		matches.append(e)
 	_lib_count.text = tr("%d games") % matches.size()
 	for i in mini(_lib_shown, matches.size()):
-		_lib_grid.add_child(_lib_card(matches[i]))
+		_lib_grid.add_child(_lib_card(matches[i], Vector2(0, 186)))
 	_lib_more.visible = matches.size() > _lib_shown
 
 
-func _lib_card(e: Dictionary) -> Control:
-	var col: Color = e["color"]
-	var b := UiStyle.button("%s\n%s" % [e["title"], str(e["genre"]).to_upper()], col.darkened(0.35), 16, 84)
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb := UiStyle.box(col.darkened(0.35), 14, 8)
+func _lib_row(g: Dictionary, all: Array) -> void:
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	_lib_rows.add_child(head)
+	var col: Color = GameLibrary.GENRE_COLORS.get(g["id"], Color.WHITE)
+	var t := _text(head, tr(str(g["title"])), 26, col.lightened(0.3))
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var more := UiStyle.button("SEE ALL >", Color(0.25, 0.3, 0.48), 15, 40)
+	more.custom_minimum_size.x = 130
+	more.focus_mode = Control.FOCUS_NONE
+	more.pressed.connect(_set_lib_genre.bind(str(g["id"])))
+	head.add_child(more)
+	_text(_lib_rows, g["desc"], 15, Color(1, 1, 1, 0.6))
+	var row_scroll := TouchScroll.make(true)
+	row_scroll.custom_minimum_size.y = 192
+	_lib_rows.add_child(row_scroll)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row_scroll.add_child(row)
+	var n := 0
+	for e: Dictionary in all:
+		if e["genre"] == g["id"] and n < 10:
+			row.add_child(_lib_card(e, Vector2(232, 182)))
+			n += 1
+
+
+func _lib_card(e: Dictionary, tile: Vector2) -> Control:
+	var gt := GameTile.new()
+	gt.game_id = e["id"]
+	gt.title = e["title"]
+	gt.subtitle = "%s  -  %s" % [tr(str(e["layout"])), tr(str(e["difficulty"]))]
+	gt.color = e["color"]
+	gt.thumb_key = "lib_" + str(e["id"])
+	gt.level_provider = _library_level.bind(str(e["id"]))
+	if tile.x > 0.0:
+		gt.tile_size = tile
+	else:
+		gt.tile_size = Vector2(200, tile.y)
+		gt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gt.chosen.connect(_show_library_detail)
+	return gt
+
+
+func _library_level(game_id: String) -> Dictionary:
+	return GameLibrary.generate(game_id)
+
+
+## Big 16:9 picture for a detail page (uses the thumbnail cache).
+func _hero(key: String, provider: Callable, col: Color) -> void:
+	var frame := PanelContainer.new()
+	var sb := UiStyle.box(col.darkened(0.5), 18, 4)
 	sb.border_color = col
 	sb.set_border_width_all(3)
-	b.add_theme_stylebox_override("normal", sb)
-	var gid: String = e["id"]
-	b.pressed.connect(func() -> void: _show_library_detail(gid))
-	return b
+	frame.add_theme_stylebox_override("panel", sb)
+	_content.add_child(frame)
+	var art := GameTile.Art.new()
+	art.color = col
+	art.custom_minimum_size = Vector2(0, 300)
+	frame.add_child(art)
+	var tr_ := TextureRect.new()
+	tr_.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tr_.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr_.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.add_child(tr_)
+	Thumbs.request(key, provider, _set_texture.bind(tr_))
+
+
+func _set_texture(tex: Texture2D, target: TextureRect) -> void:
+	if is_instance_valid(target):
+		target.texture = tex
 
 
 func _show_library_detail(game_id: String) -> void:
@@ -309,20 +395,22 @@ func _show_library_detail(game_id: String) -> void:
 	for ch in _content.get_children():
 		ch.queue_free()
 	_busy_buttons.clear()
+	if _scroll != null:
+		_scroll.scroll_vertical = 0
 	var e := GameLibrary.entry(game_id)
 	var col: Color = e["color"]
 	var back := UiStyle.button("< ALL GAMES", Color(0.3, 0.33, 0.45), 18, 46)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	back.custom_minimum_size.x = 200
-	back.pressed.connect(func() -> void: open_tab("PLAY"))
+	back.pressed.connect(open_tab.bind("PLAY"))
 	_content.add_child(back)
-	_text(_content, e["title"], 44, col.lightened(0.35))
-	_text(_content, e["desc"], 22, Color(1, 1, 1, 0.9))
-	_text(_content, tr("Type: %s   -   Theme: %s") % [str(e["genre"]).to_upper(), str(e["theme"]).to_upper()], 18, Color(1, 1, 1, 0.6))
+	_hero("lib_" + game_id, _library_level.bind(game_id), col)
+	_text(_content, e["title"], 40, col.lightened(0.35))
+	_text(_content, e["desc"], 21, Color(1, 1, 1, 0.9))
+	_text(_content, tr("Type: %s   -   Map: %s   -   Difficulty: %s") % [tr(str(e["genre_title"])), tr(str(e["layout"])), tr(str(e["difficulty"]))], 17, Color(1, 1, 1, 0.65))
 	for spec in [["PLAY SOLO", Color(0.2, 0.72, 0.35), "offline"], ["HOST ON WI-FI", Color(0.25, 0.5, 0.95), "host"]]:
 		var b := UiStyle.button(spec[0], spec[1])
-		var mode: String = spec[2]
-		b.pressed.connect(func() -> void: _play_library(game_id, mode))
+		b.pressed.connect(_play_library.bind(game_id, str(spec[2])))
 		_content.add_child(b)
 		_busy_buttons.append(b)
 	var row := HBoxContainer.new()
@@ -334,12 +422,16 @@ func _show_library_detail(game_id: String) -> void:
 	row.add_child(addr)
 	var join := UiStyle.button("JOIN", Color(1.0, 0.55, 0.2))
 	join.custom_minimum_size = Vector2(150, 72)
-	join.pressed.connect(func() -> void: _join("ugc", addr.text))
+	join.pressed.connect(_join_from.bind("ugc", addr))
 	row.add_child(join)
 	var remix := UiStyle.button("REMIX IN STUDIO", Color(0.95, 0.55, 0.2))
-	remix.pressed.connect(func() -> void: _remix_library(game_id))
+	remix.pressed.connect(_remix_library.bind(game_id))
 	_content.add_child(remix)
 	_text(_content, "REMIX copies this game into your CREATE list so you can change anything.", 16, Color(1, 1, 1, 0.6))
+
+
+func _join_from(exp_id: String, addr: LineEdit) -> void:
+	_join(exp_id, addr.text)
 
 
 func _play_library(game_id: String, mode: String) -> void:
@@ -412,18 +504,35 @@ func _build_create() -> void:
 	_text(_content, "Your games", 26)
 	for g: Dictionary in saved:
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
+		row.add_theme_constant_override("separation", 10)
 		_content.add_child(row)
-		var l := _text(row, "%s   (%d parts)" % [g["name"], g["parts"]], 22)
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var slot: String = g["slot"]
+		var gt := GameTile.new()
+		gt.game_id = slot
+		gt.title = str(g["name"])
+		gt.subtitle = tr("%d parts") % int(g["parts"])
+		gt.color = Color(0.95, 0.55, 0.2)
+		gt.tile_size = Vector2(220, 172)
+		gt.thumb_key = "c_%s_%d" % [slot, int(g["modified"])]
+		gt.level_provider = _creation_level.bind(slot)
+		gt.chosen.connect(_creation_action.bind("EDIT"))
+		row.add_child(gt)
+		var acts := GridContainer.new()
+		acts.columns = 2
+		acts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		acts.add_theme_constant_override("h_separation", 8)
+		acts.add_theme_constant_override("v_separation", 8)
+		row.add_child(acts)
 		for spec in [["EDIT", Color(0.95, 0.55, 0.2)], ["PLAY", Color(0.2, 0.72, 0.35)],
 				["HOST", Color(0.25, 0.5, 0.95)], ["DELETE", Color(0.6, 0.3, 0.3)]]:
-			var b := UiStyle.button(spec[0], spec[1], 16, 48)
-			b.custom_minimum_size.x = 96
-			var action: String = spec[0]
-			b.pressed.connect(func() -> void: _creation_action(slot, action))
-			row.add_child(b)
+			var b := UiStyle.button(spec[0], spec[1], 18, 76)
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			b.pressed.connect(_creation_action.bind(slot, str(spec[0])))
+			acts.add_child(b)
+
+
+func _creation_level(slot: String) -> Dictionary:
+	return Level.load_slot(slot)
 
 
 func _creation_action(slot: String, action: String) -> void:

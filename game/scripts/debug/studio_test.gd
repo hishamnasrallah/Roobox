@@ -131,6 +131,78 @@ func _run() -> void:
 	_check(_p(air) == Vector3(3, 11, 3), "place a block in the air", air)
 	st.set_build_height(0.0)
 
+	# --- Studio tools: models, groups, handles, snapping, redo, properties ---
+	st.set_tool("build")
+	st.set_grid(1.0)
+	var mparts := st.place_model("house", Vector3(30, 0, 30))
+	_check(mparts.size() >= 8 and str((mparts[0] as Dictionary).get("g", "")) != "", "model is placed as a group", mparts.size())
+	st.set_tool("select")
+	st.select(st._entry_of_part(mparts[0]))
+	_check(st.selection_size() == mparts.size(), "selecting one part selects the whole model", st.selection_size())
+	st.set_tool("move")
+	var before := _p(mparts[0])
+	st.begin_transform("move", Vector3.RIGHT)
+	st.update_transform(3.4)
+	st.end_transform()
+	_check(_p(mparts[0]).is_equal_approx(before + Vector3(3, 0, 0)), "move handle snaps to the grid", _p(mparts[0]))
+	st.undo()
+	_check(_p(mparts[0]).is_equal_approx(before), "undo a handle drag", _p(mparts[0]))
+	st.redo()
+	_check(_p(mparts[0]).is_equal_approx(before + Vector3(3, 0, 0)), "redo a handle drag", _p(mparts[0]))
+	st.set_tool("rotate")
+	st.set_rot_step(90.0)
+	st.begin_transform("rotate", Vector3.UP)
+	st.update_transform(100.0)
+	st.end_transform()
+	_check(int((mparts[0] as Dictionary).get("r", 0)) == 1, "rotate handle turns the model in 90 degree steps", mparts[0])
+	st.set_tool("build")
+	st.set_preset("block")
+	var free := st.place_at(Vector3(-30, 0, 30), Vector3.UP)
+	st.set_tool("scale")
+	st.select(st._entry_of_part(free))
+	st.begin_transform("scale", Vector3.UP)
+	st.update_transform(2.2)
+	st.end_transform()
+	_check(Level.size(free) == Vector3(2, 4, 2) and _p(free) == Vector3(-30, 2, 30), "scale handle grows one face", free)
+	st.set_rot_step(15.0)
+	st.rotate_selected()
+	_check(is_equal_approx(float(free.get("ry", 0.0)), 15.0), "free rotation in 15 degree steps", free)
+	st.set_transparency(0.5)
+	st.toggle_flag("nc")
+	st.toggle_flag("u")
+	_check(is_equal_approx(float(free.get("a", 0.0)), 0.5) and free.get("nc", 0) == 1 and free.get("u", 0) == 1,
+		"transparency / can-collide / anchored properties", free)
+	st.set_rot_step(90.0)
+	st.set_tool("build")
+	st.set_preset("cube")
+	var qa := st.place_at(Vector3(-36, 0, 36), Vector3.UP)
+	var qb := st.place_at(Vector3(-40, 0, 36), Vector3.UP)
+	st.set_tool("select")
+	st.toggle_multi()
+	st.select(st._entry_of_part(qa))
+	st.select(st._entry_of_part(qb))
+	_check(st.selection_size() == 2, "multi-select", st.selection_size())
+	st.group_selected()
+	st.toggle_multi()
+	st.select({})
+	st.select(st._entry_of_part(qa))
+	_check(st.selection_size() == 2 and qa.get("g", "") == qb.get("g", "x"), "group selects together", [qa, qb])
+	st.ungroup_selected()
+	_check(not qa.has("g") and not qb.has("g"), "ungroup")
+	st.select({})
+	var n_terrain := st.part_count()
+	var added := st.generate_terrain("hills")
+	_check(added > 100 and st.part_count() == n_terrain + added, "terrain generator", added)
+	st.clear_terrain()
+	_check(st.part_count() == n_terrain, "clear terrain", st.part_count())
+	st.set_tool("build")
+	var kk := 0
+	for id in ["corner", "truss", "fire", "smoke", "sparkles"]:
+		st.set_preset(id)
+		var np := st.place_at(Vector3(-28 + kk * 5, 0, -34), Vector3.UP)
+		_check(not np.is_empty() and np["t"] == id, "place " + id)
+		kk += 1
+
 	var bad := st.set_script_text("on_touch('door', function(p)\n  p:give_coins(")
 	_check(bad.begins_with("line "), "script syntax errors are reported", bad)
 	var good := st.set_script_text("""on_start(function()
@@ -188,6 +260,19 @@ end)
 	await get_tree().process_frame
 	_check(Game.lifetime_coins == coins_before + 7, "on_touch gives coins to the player",
 		[coins_before, Game.lifetime_coins])
+	var door_index := -1
+	var lparts: Array = (ex.get("level") as Dictionary)["parts"] if ex != null else []
+	for i in lparts.size():
+		if str((lparts[i] as Dictionary).get("n", "")) == "door":
+			door_index = i
+	main.call("_on_ugc_touched", "door#%d" % door_index)
+	await get_tree().process_frame
+	_check(Game.lifetime_coins == coins_before + 14, "per-part touch tokens reach on_touch", [door_index, Game.lifetime_coins])
+	var phys := false
+	for n2 in ex.get_children():
+		if n2 is RigidBody3D:
+			phys = true
+	_check(phys, "unanchored part becomes a physics body in play")
 	Level.delete_slot(slot)
 	_finish()
 

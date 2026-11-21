@@ -5,7 +5,7 @@ extends GameMode
 ## actions go to the targeted player. Late joiners get the current state.
 ##
 ## Script API:
-##   on_start(fn)  on_touch(name, fn(player))  after(sec, fn)  every(sec, fn)
+##   on_start(fn)  on_touch(name, fn(player, part))  after(sec, fn)  every(sec, fn)
 ##   cancel(id)    time()                      print(...)
 ##   world.find(name) -> part   part:set_color(i) part:set_visible(b)
 ##       part:set_solid(b) part:move_to(x,y,z[,sec]) part:move_by(dx,dy,dz[,sec])
@@ -75,11 +75,14 @@ func _process(delta: float) -> void:
 
 
 ## A player touched a named part (called by main on the authority).
+## part_name is "name" or "name#index" (one specific part of that name);
+## handlers get (player, part) where part is that exact part.
 func fire_touch(part_name: String, peer_id: int) -> void:
 	if vm == null:
 		return
-	for fn in _touch.get(part_name, []):
-		_invoke(fn, [_player_ref(peer_id)])
+	var base := part_name.get_slice("#", 0)
+	for fn in _touch.get(base, []):
+		_invoke(fn, [_player_ref(peer_id), _part_ref(part_name)])
 
 
 func snapshot() -> Dictionary:
@@ -258,6 +261,12 @@ func _part_pos(n: String) -> Vector3:
 
 func _world_op(n: String, op: String, args: Array) -> void:
 	var ev := {"t": "sop", "n": n, "op": op, "a": args}
+	if not n.contains("#"):
+		# A whole-group change replaces earlier single-part changes.
+		var suffix := "|" + op
+		for k: String in _ops.keys():
+			if k.begins_with(n + "#") and k.ends_with(suffix):
+				_ops.erase(k)
 	_ops[n + "|" + op] = ev
 	emit_event(ev)
 

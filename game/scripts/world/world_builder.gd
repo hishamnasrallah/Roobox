@@ -55,6 +55,16 @@ func part(shape: String, pos: Vector3, size: Vector3, color: Color, collide: boo
 		body.add_child(col)
 
 
+## Collision only (no visual) - e.g. the solid core of a truss.
+func collider(shape: String, pos: Vector3, size: Vector3, rot: Vector3 = Vector3.ZERO) -> void:
+	var ck := Vector2i(floori(pos.x / CHUNK), floori(pos.z / CHUNK))
+	var body := _body_for(ck)
+	var col := CollisionShape3D.new()
+	col.shape = collision_shape(shape, size)
+	col.transform = Transform3D(Basis.from_euler(rot), pos)
+	body.add_child(col)
+
+
 ## Creates the MultiMesh instances. Call once after adding everything.
 func build() -> void:
 	for key: String in _batches:
@@ -101,6 +111,13 @@ func collision_shape(shape: String, size: Vector3) -> Shape3D:
 		return _shape_cache[k] as Shape3D
 	var s: Shape3D
 	match shape:
+		"corner":
+			var cc := ConvexPolygonShape3D.new()
+			var cpts := PackedVector3Array()
+			for v in CORNER_POINTS:
+				cpts.append((v as Vector3) * size)
+			cc.points = cpts
+			s = cc
 		"ramp":
 			var c := ConvexPolygonShape3D.new()
 			var pts := PackedVector3Array()
@@ -139,6 +156,8 @@ func unit_mesh(shape: String) -> Mesh:
 		return _unit_meshes[shape] as Mesh
 	var m: Mesh
 	match shape:
+		"corner":
+			m = corner_mesh()
 		"ramp":
 			var pm := PrismMesh.new()
 			pm.left_to_right = 0.0
@@ -169,6 +188,32 @@ func unit_mesh(shape: String) -> Mesh:
 			m = BoxMesh.new()
 	_unit_meshes[shape] = m
 	return m
+
+
+## Corner wedge: square base, apex above the (+X, -Z) corner.
+const CORNER_POINTS: Array[Vector3] = [
+	Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3(0.5, -0.5, 0.5),
+	Vector3(-0.5, -0.5, 0.5), Vector3(0.5, 0.5, -0.5),
+]
+
+
+## Built double-sided so it shows correctly whatever the winding convention.
+static func corner_mesh() -> ArrayMesh:
+	var p := CORNER_POINTS
+	var tris := [[p[0], p[1], p[2]], [p[0], p[2], p[3]], [p[0], p[1], p[4]],
+		[p[1], p[2], p[4]], [p[2], p[3], p[4]], [p[3], p[0], p[4]]]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for tri: Array in tris:
+		for order in [[0, 1, 2], [0, 2, 1]]:
+			var a: Vector3 = tri[order[0]]
+			var b: Vector3 = tri[order[1]]
+			var c: Vector3 = tri[order[2]]
+			var n := Plane(a, b, c).normal
+			for v in [a, b, c]:
+				st.set_normal(n)
+				st.add_vertex(v)
+	return st.commit()
 
 
 func _material(kind: String) -> StandardMaterial3D:
