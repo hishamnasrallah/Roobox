@@ -15,6 +15,7 @@ var tool: String = "build"
 var preset_id: String = "block"
 var rot_steps: int = 0
 var color_index: int = -1   # -1 = preset default
+var material_id: String = "plastic"
 
 var _entries: Array = []    # [{part: Dictionary, node: Node3D}]
 var _undo: Array = []
@@ -49,6 +50,13 @@ var _sel_info: Label
 var _sel_motion: Button
 var _sel_name: LineEdit
 var _script_panel: Control
+var _sign_row: HBoxContainer
+var _sign_edit: LineEdit
+var _mat_toggle: Button
+var _mat_row: HBoxContainer
+var _color_row: HBoxContainer
+var _mat_buttons: Dictionary = {}
+var _env_button: Button
 ## Build plane: lets you place parts in the air at the camera focus height.
 var air_mode: bool = false
 var _plane: MeshInstance3D
@@ -185,6 +193,10 @@ func place_at(point: Vector3, normal: Vector3) -> Dictionary:
 				_remove_entry(e, false)
 	var part := {"t": t, "p": Level._arr(c), "s": Level._arr(s), "r": rot_steps,
 		"c": color_index if color_index >= 0 else int(pr["c"])}
+	if material_id != "plastic" and t in Level.SOLID:
+		part["mat"] = material_id
+	if t == "sign":
+		part["txt"] = "Welcome!"
 	_add_part(part)
 	_undo.append({"op": "add", "part": part})
 	Sfx.play("pop", -6.0)
@@ -196,11 +208,16 @@ func paint(e: Dictionary) -> void:
 	if e.is_empty():
 		return
 	var part: Dictionary = e["part"]
-	var new_c := color_index if color_index >= 0 else 4
-	if int(part["c"]) == new_c:
+	var new_c := color_index if color_index >= 0 else int(part["c"])
+	var new_mat := material_id if part["t"] in Level.SOLID else str(part.get("mat", "plastic"))
+	if int(part["c"]) == new_c and str(part.get("mat", "plastic")) == new_mat:
 		return
-	_undo.append({"op": "paint", "part": part, "old": int(part["c"])})
+	_undo.append({"op": "edit", "part": part, "old": part.duplicate(true)})
 	part["c"] = new_c
+	if new_mat == "plastic":
+		part.erase("mat")
+	else:
+		part["mat"] = new_mat
 	_rebuild_entry(e)
 	Sfx.play("click")
 
@@ -453,6 +470,9 @@ func _update_selection() -> void:
 			int(s.x), int(s.y), int(s.z), ("  \"%s\"" % part["n"]) if part.has("n") else ""]
 		_sel_motion.text = "MOTION: %s" % Level.MOTION_LABELS.get(str(part.get("m", "")), "NONE")
 		_sel_motion.disabled = not (part["t"] in Level.SOLID)
+		_sign_row.visible = part["t"] == "sign"
+		if part["t"] == "sign" and not _sign_edit.has_focus():
+			_sign_edit.text = str(part.get("txt", ""))
 		if not _sel_name.has_focus():
 			_sel_name.text = str(part.get("n", ""))
 
@@ -461,6 +481,34 @@ func set_preset(id: String) -> void:
 	preset_id = id
 	tool = "build"
 	_refresh_ui()
+
+
+func set_material(id: String) -> void:
+	material_id = id
+	_refresh_ui()
+
+
+func cycle_env() -> void:
+	var cur := str(level.get("env", "day"))
+	var next := Level.ENVS[(Level.ENVS.find(cur) + 1) % Level.ENVS.size()]
+	if next == "day":
+		level.erase("env")
+	else:
+		level["env"] = next
+	if get_parent().has_method("apply_env"):
+		get_parent().call("apply_env", next)
+	_refresh_ui()
+
+
+func set_sign_text(text: String) -> void:
+	var part := _begin_edit()
+	if part.is_empty():
+		return
+	if part["t"] != "sign":
+		_undo.pop_back()
+		return
+	part["txt"] = text.strip_edges().substr(0, 60)
+	_end_edit()
 
 
 func set_color(i: int) -> void:
@@ -536,11 +584,7 @@ func _make_node(part: Dictionary) -> Node3D:
 	body.collision_mask = 0
 	body.position = Level.pos(part)
 	body.rotation.y = Level.yaw(part)
-	var mi := MeshInstance3D.new()
-	mi.mesh = _cache.unit_mesh(shape)
-	mi.scale = s
-	mi.material_override = _material(col, t == "kill" or t == "jumppad" or t == "coin")
-	body.add_child(mi)
+	_add_visual(body, part, t, s, col, shape)
 	var cs := CollisionShape3D.new()
 	cs.shape = _cache.collision_shape(shape, s)
 	body.add_child(cs)
@@ -562,6 +606,72 @@ func _make_node(part: Dictionary) -> Node3D:
 		body.add_child(l)
 	_parts_root.add_child(body)
 	return body
+
+
+func _add_visual(body: Node3D, part: Dictionary, t: String, s: Vector3, col: Color, shape: String) -> void:
+	var mat := str(part.get("mat", "plastic"))
+	match t:
+		"stairs":
+			for st: Array in Level.stair_steps(s):
+				var step := MeshInstance3D.new()
+				step.mesh = _cache.unit_mesh("box")
+				step.position = st[0]
+				step.scale = st[1]
+				step.material_override = _part_material(mat, col)
+				body.add_child(step)
+			return
+		"tree":
+			_mesh(body, Vector3(0, -s.y * 0.2, 0), Vector3(s.x * 0.25, s.y * 0.6, s.z * 0.25), Materials.material("log", Color.WHITE))
+			_mesh(body, Vector3(0, s.y * 0.25, 0), s * Vector3(1, 0.5, 1), Materials.material("leaves", Color.WHITE))
+			return
+		"sign":
+			_mesh(body, Vector3.ZERO, s, Materials.material("planks", Color.WHITE))
+			var lbl := Level._sign_label(str(part.get("txt", "")), Vector3.ZERO, s, Vector3.ZERO)
+			body.add_child(lbl)
+			return
+		"ladder":
+			body.add_child(Level._ladder_visual(Vector3.ZERO, s, Vector3.ZERO))
+			return
+		"spikes":
+			_mesh(body, Vector3(0, -s.y * 0.35, 0), Vector3(s.x, s.y * 0.3, s.z), _material(col, false))
+			Level._spikes(body, Vector3.ZERO, s, Vector3.ZERO)
+			return
+		"water":
+			var wm := StandardMaterial3D.new()
+			wm.albedo_color = Color(0.2, 0.5, 0.95, 0.45)
+			wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			_mesh(body, Vector3.ZERO, s, wm)
+			return
+		"light":
+			var bulb := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.35
+			sm.height = 0.7
+			bulb.mesh = sm
+			bulb.material_override = Fx.glow_material(col, 3.0)
+			body.add_child(bulb)
+			return
+	var glow := t in ["kill", "jumppad", "coin", "speed", "teleport", "conveyor"]
+	var mi := MeshInstance3D.new()
+	mi.mesh = _cache.unit_mesh(shape)
+	mi.scale = s
+	mi.material_override = _material(col, glow) if not (t in Level.SOLID) else _part_material(mat, col)
+	body.add_child(mi)
+
+
+func _mesh(body: Node3D, pos: Vector3, size: Vector3, m: Material) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = _cache.unit_mesh("box")
+	mi.position = pos
+	mi.scale = size
+	mi.material_override = m
+	body.add_child(mi)
+
+
+func _part_material(mat: String, col: Color) -> StandardMaterial3D:
+	if mat == "plastic":
+		return _material(col, false)
+	return Materials.material(mat, col)
 
 
 func _material(col: Color, glow: bool) -> StandardMaterial3D:
@@ -637,6 +747,10 @@ func _build_ui() -> void:
 	_air_button.custom_minimum_size.x = 90
 	_air_button.pressed.connect(toggle_air)
 	tools.add_child(_air_button)
+	_env_button = UiStyle.button("SKY", Color(0.25, 0.3, 0.48), 18, 50)
+	_env_button.custom_minimum_size.x = 120
+	_env_button.pressed.connect(cycle_env)
+	tools.add_child(_env_button)
 	for spec in [["UP", 1.0], ["DOWN", -1.0]]:
 		var vb := UiStyle.button(spec[0], Color(0.3, 0.33, 0.45), 18, 50)
 		vb.custom_minimum_size.x = 96
@@ -706,6 +820,21 @@ func _build_ui() -> void:
 	nb.custom_minimum_size.x = 70
 	nb.pressed.connect(func() -> void: name_selected(_sel_name.text))
 	nrow.add_child(nb)
+	_sign_row = HBoxContainer.new()
+	_sign_row.add_theme_constant_override("separation", 4)
+	sv.add_child(_sign_row)
+	_sign_edit = UiStyle.line_edit("sign text", 18)
+	_sign_edit.custom_minimum_size.y = 44
+	_sign_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sign_edit.max_length = 60
+	_sign_edit.focus_entered.connect(func() -> void: Game.input_blocked = true)
+	_sign_edit.focus_exited.connect(func() -> void: Game.input_blocked = false)
+	_sign_edit.text_submitted.connect(func(t: String) -> void: set_sign_text(t))
+	_sign_row.add_child(_sign_edit)
+	var sbtn := UiStyle.button("TEXT", Color(0.2, 0.6, 0.35), 15, 44)
+	sbtn.custom_minimum_size.x = 70
+	sbtn.pressed.connect(func() -> void: set_sign_text(_sign_edit.text))
+	_sign_row.add_child(sbtn)
 	_touch.blockers.append(_sel_panel)
 
 	# Bottom: colors + presets.
@@ -720,13 +849,36 @@ func _build_ui() -> void:
 	var colors := HBoxContainer.new()
 	colors.add_theme_constant_override("separation", 6)
 	bottom.add_child(colors)
+	_mat_toggle = UiStyle.button("COLORS", Color(0.35, 0.3, 0.5), 15, 46)
+	_mat_toggle.custom_minimum_size.x = 104
+	_mat_toggle.pressed.connect(_toggle_swatches)
+	colors.add_child(_mat_toggle)
+	_mat_row = HBoxContainer.new()
+	_mat_row.add_theme_constant_override("separation", 4)
+	_mat_row.visible = false
+	colors.add_child(_mat_row)
+	for m: Dictionary in Materials.LIST:
+		var mb := Button.new()
+		mb.custom_minimum_size = Vector2(46, 46)
+		mb.focus_mode = Control.FOCUS_NONE
+		mb.tooltip_text = m["name"]
+		if m["id"] != "plastic" and m["id"] != "neon" and m["id"] != "wool":
+			mb.icon = Materials.texture(m["id"])
+			mb.expand_icon = true
+		var mid: String = m["id"]
+		mb.pressed.connect(func() -> void: set_material(mid))
+		_mat_row.add_child(mb)
+		_mat_buttons[mid] = mb
+	_color_row = HBoxContainer.new()
+	_color_row.add_theme_constant_override("separation", 6)
+	colors.add_child(_color_row)
 	for i in Level.COLORS.size():
 		var cb := Button.new()
 		cb.custom_minimum_size = Vector2(46, 46)
 		cb.focus_mode = Control.FOCUS_NONE
 		var ci := i
 		cb.pressed.connect(func() -> void: set_color(ci))
-		colors.add_child(cb)
+		_color_row.add_child(cb)
 		_color_buttons.append(cb)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size.y = 76
@@ -842,6 +994,12 @@ func _build_script_panel() -> void:
 		foot.add_child(b)
 
 
+func _toggle_swatches() -> void:
+	_mat_row.visible = not _mat_row.visible
+	_color_row.visible = not _mat_row.visible
+	_refresh_ui()
+
+
 func _clear_code() -> void:
 	_code.text = ""
 
@@ -884,6 +1042,17 @@ func _refresh_ui() -> void:
 		for st in ["normal", "hover", "pressed"]:
 			_color_buttons[i].add_theme_stylebox_override(st, sb)
 	_rot_button.text = "ROTATE %d" % (rot_steps * 90)
+	if _env_button != null:
+		_env_button.text = "SKY: " + str(level.get("env", "day")).to_upper()
+	for mid: String in _mat_buttons:
+		var mbtn: Button = _mat_buttons[mid]
+		var msb := UiStyle.box(Materials.info(mid)["ui"], 10, 0)
+		msb.border_color = Color(1, 1, 1) if mid == material_id else Color(0, 0, 0, 0.35)
+		msb.set_border_width_all(5 if mid == material_id else 2)
+		for st2 in ["normal", "hover", "pressed"]:
+			mbtn.add_theme_stylebox_override(st2, msb)
+	if _mat_toggle != null:
+		_mat_toggle.text = "MATERIAL" if _mat_row.visible else "COLORS"
 	if _air_button != null:
 		_air_button.text = "AIR %d" % int(build_height()) if air_mode else "AIR"
 		_air_button.add_theme_stylebox_override("normal",

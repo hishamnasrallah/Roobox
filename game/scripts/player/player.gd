@@ -32,6 +32,12 @@ var _dead: bool = false
 var _target_yaw: float = PI
 var _net_timer: float = 0.0
 
+## Functional parts (see PartVolume).
+var water_count: int = 0
+var climb_count: int = 0
+var external_velocity: Vector3 = Vector3.ZERO
+var _boost_t: float = 0.0
+
 const NET_RATE := 1.0 / 20.0
 
 
@@ -71,7 +77,9 @@ func _physics_process(delta: float) -> void:
 	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
 	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
 	var wish := right * input.x + forward * input.y
-	var target := wish * max_speed
+	var speed_now := max_speed * (1.8 if _boost_t > 0.0 else 1.0)
+	_boost_t = maxf(_boost_t - delta, 0.0)
+	var target := wish * speed_now
 
 	var accel := air_accel
 	if on_floor:
@@ -84,8 +92,14 @@ func _physics_process(delta: float) -> void:
 	velocity.x = hv.x
 	velocity.z = hv.z
 
-	# --- Gravity ---
-	if not on_floor:
+	# --- Gravity / swimming / climbing ---
+	if climb_count > 0 and (input.y > 0.2 or Game.is_jump_held()):
+		velocity.y = 5.5
+	elif water_count > 0:
+		velocity.y = maxf(velocity.y - gravity * 0.2 * delta, -3.0)
+		if Game.is_jump_held():
+			velocity.y = move_toward(velocity.y, 4.5, 25.0 * delta)
+	elif not on_floor:
 		var g := gravity
 		if velocity.y < 0.0:
 			g *= fall_multiplier
@@ -108,7 +122,11 @@ func _physics_process(delta: float) -> void:
 		_jumping = false
 
 	_prev_vy = velocity.y
+	var ext := external_velocity
+	external_velocity = Vector3.ZERO
+	velocity += ext
 	move_and_slide()
+	velocity -= ext
 	if is_on_wall() and (on_floor or _was_on_floor) and wish.length_squared() > 0.01 and velocity.y <= 0.5:
 		_try_step_up(wish.normalized())
 
@@ -176,6 +194,11 @@ func knockback(v: Vector3) -> void:
 	velocity = v
 	_control_lock = 0.35
 	_jumping = false
+
+
+## Temporary speed boost (speed pads).
+func boost(seconds: float) -> void:
+	_boost_t = maxf(_boost_t, seconds)
 
 
 ## Vertical launch (jump pads).

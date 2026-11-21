@@ -109,6 +109,13 @@ func collision_shape(shape: String, size: Vector3) -> Shape3D:
 				pts.append((v as Vector3) * size)
 			c.points = pts
 			s = c
+		"cone":
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.0
+			cm.bottom_radius = maxf(size.x, size.z) * 0.5
+			cm.height = size.y
+			cm.radial_segments = 12
+			s = cm.create_convex_shape()
 		"ball":
 			var sp := SphereShape3D.new()
 			sp.radius = maxf(size.x, maxf(size.y, size.z)) * 0.5
@@ -151,6 +158,13 @@ func unit_mesh(shape: String) -> Mesh:
 			cm.height = 1.0
 			cm.radial_segments = 20
 			m = cm
+		"cone":
+			var co := CylinderMesh.new()
+			co.top_radius = 0.0
+			co.bottom_radius = 0.5
+			co.height = 1.0
+			co.radial_segments = 20
+			m = co
 		_:
 			m = BoxMesh.new()
 	_unit_meshes[shape] = m
@@ -159,6 +173,12 @@ func unit_mesh(shape: String) -> Mesh:
 
 func _material(kind: String) -> StandardMaterial3D:
 	if _materials.has(kind):
+		return _materials[kind] as StandardMaterial3D
+	if kind.begins_with("mat:"):
+		_materials[kind] = Materials.batch_material(kind.substr(4))
+		return _materials[kind] as StandardMaterial3D
+	if kind.begins_with("neon|"):
+		_materials[kind] = Materials.material("neon", Color.html(kind.substr(5)))
 		return _materials[kind] as StandardMaterial3D
 	var m := StandardMaterial3D.new()
 	m.vertex_color_use_as_albedo = true

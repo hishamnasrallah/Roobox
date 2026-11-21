@@ -17,6 +17,9 @@ var menu: MainMenu
 var studio: Studio
 
 var _menu_stage: Node3D
+var _env: Environment
+var _sky_mat: ProceduralSkyMaterial
+var _sun: DirectionalLight3D
 var _menu_cam: Camera3D
 var _preview: Avatar
 var _menu_t: float = 0.0
@@ -290,6 +293,7 @@ func _start_studio(slot: String) -> void:
 	studio.exit_requested.connect(func() -> void: Game.restart())
 	studio.test_requested.connect(_on_studio_test)
 	add_child(studio)
+	apply_env(str(studio.level.get("env", "day")))
 
 
 func _on_studio_test(level: Dictionary) -> void:
@@ -549,6 +553,8 @@ func _build_environment() -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	_env = env
+	_sky_mat = sky_mat
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52.0, -35.0, 0.0)
@@ -560,3 +566,60 @@ func _build_environment() -> void:
 	sun.directional_shadow_max_distance = 70.0
 	sun.directional_shadow_fade_start = 0.85
 	add_child(sun)
+	_sun = sun
+
+
+## Sky/lighting presets used by creations: day, sunset, night, space, fog.
+func apply_env(preset: String) -> void:
+	if _env == null:
+		return
+	var top := Color(0.22, 0.47, 0.95)
+	var horizon := Color(0.68, 0.84, 1.0)
+	var ground := Color(0.16, 0.38, 0.7)
+	var sun_col := Color(1.0, 0.96, 0.88)
+	var sun_e := 1.25
+	var sun_pitch := -52.0
+	var ambient := 0.8
+	var fog := 0.0016
+	match preset:
+		"sunset":
+			top = Color(0.25, 0.28, 0.6)
+			horizon = Color(1.0, 0.58, 0.32)
+			ground = Color(0.35, 0.22, 0.3)
+			sun_col = Color(1.0, 0.68, 0.42)
+			sun_e = 1.0
+			sun_pitch = -16.0
+			ambient = 0.65
+		"night":
+			top = Color(0.01, 0.02, 0.07)
+			horizon = Color(0.07, 0.1, 0.22)
+			ground = Color(0.02, 0.03, 0.08)
+			sun_col = Color(0.55, 0.65, 1.0)
+			sun_e = 0.3
+			ambient = 0.35
+		"space":
+			top = Color(0.0, 0.0, 0.02)
+			horizon = Color(0.12, 0.04, 0.2)
+			ground = Color(0.0, 0.0, 0.02)
+			sun_col = Color(0.95, 0.95, 1.0)
+			sun_e = 1.1
+			ambient = 0.45
+			fog = 0.0
+		"fog":
+			top = Color(0.6, 0.64, 0.7)
+			horizon = Color(0.75, 0.78, 0.82)
+			ground = Color(0.6, 0.62, 0.66)
+			sun_e = 0.6
+			ambient = 0.9
+			fog = 0.025
+	_sky_mat.sky_top_color = top
+	_sky_mat.sky_horizon_color = horizon
+	_sky_mat.ground_horizon_color = horizon
+	_sky_mat.ground_bottom_color = ground
+	_env.ambient_light_energy = ambient
+	_env.fog_light_color = horizon
+	_env.fog_density = fog
+	_env.fog_enabled = fog > 0.0
+	_sun.light_color = sun_col
+	_sun.light_energy = sun_e
+	_sun.rotation_degrees.x = sun_pitch

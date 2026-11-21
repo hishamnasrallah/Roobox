@@ -33,6 +33,9 @@ func setup() -> void:
 	sky_label.position = spawn_point + Vector3(0, 7, -8)
 	add_child(sky_label)
 	_add_touch_areas()
+	var host := get_parent()
+	if host != null and host.has_method("apply_env"):
+		host.call("apply_env", str(level.get("env", "day")))
 
 
 func has_script() -> bool:

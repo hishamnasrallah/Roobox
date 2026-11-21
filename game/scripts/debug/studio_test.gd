@@ -97,6 +97,30 @@ func _run() -> void:
 	st.select(st._entry_of_part(p1))
 	st.name_selected("door")
 
+	# --- Materials + new parts ---
+	st.set_tool("build")
+	st.set_material("brick")
+	st.set_preset("cube")
+	var bc := st.place_at(Vector3(15.3, 0, 15.6), Vector3.UP)
+	_check(bc.get("mat", "") == "brick" and Level.size(bc) == Vector3.ONE and _p(bc) == Vector3(15.5, 0.5, 15.5),
+		"1x1 brick cube on the grid", bc)
+	st.set_material("plastic")
+	var k := 0
+	for id in ["stairs", "cone", "spikes", "speed", "conveyor", "water", "ladder", "light", "sign", "tree"]:
+		st.set_preset(id)
+		st.place_at(Vector3(-28 + k * 5, 0, 26), Vector3.UP)
+		k += 1
+	st.set_preset("teleport")
+	var tp1 := st.place_at(Vector3(20, 0, -20), Vector3.UP)
+	var tp2 := st.place_at(Vector3(-20, 0, 20), Vector3.UP)
+	st.set_tool("select")
+	for tp in [tp1, tp2]:
+		st.select(st._entry_of_part(tp))
+		st.name_selected("tp")
+	st.set_tool("build")
+	st.cycle_env()
+	_check(str(st.level.get("env", "")) == "sunset", "sky preset cycles", st.level.get("env"))
+
 	# --- AIR building on the plane ---
 	st.set_tool("build")
 	st.set_preset("block")
@@ -141,6 +165,16 @@ end)
 	var reg: Dictionary = ex.get("registry") if ex != null else {}
 	var named: Array = (reg.get("by_name", {}) as Dictionary).get("door", [])
 	_check(named.size() == 1 and named[0] is MovingPlatform, "named moving part is a MovingPlatform in play", named)
+	var vols := {}
+	var tp_ok := false
+	for n in ex.get_children():
+		if n is PartVolume:
+			vols[(n as PartVolume).kind] = true
+			if (n as PartVolume).kind == "teleport" and (n as PartVolume).target.is_finite():
+				tp_ok = true
+	_check(vols.has("water") and vols.has("ladder") and vols.has("speed") and vols.has("conveyor"),
+		"functional parts become volumes in play", vols.keys())
+	_check(tp_ok, "teleports with the same name are paired")
 	var host: Node = main.get("game_mode")
 	_check(host is ScriptHost and (host as ScriptHost).last_error == "", "script host runs without errors",
 		(host as ScriptHost).last_error if host is ScriptHost else host)
