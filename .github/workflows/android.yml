@@ -77,6 +77,12 @@ jobs:
           if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" script.log; then exit 1; fi
           grep -q "SCRIPTTEST PASS" script.log
 
+      - name: Game library test (200+ generated games)
+        run: |
+          godot --headless --path game --fixed-fps 60 -- --librarytest 2>&1 | grep -vE "fontconfig|os_linuxbsd" | tee library.log
+          if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" library.log; then exit 1; fi
+          grep -q "LIBRARYTEST PASS" library.log
+
       - name: Shop test (coins, buy, wear, daily reward)
         run: |
           godot --headless --path game -- --shoptest 2>&1 | grep -vE "fontconfig|os_linuxbsd" | tee shop.log

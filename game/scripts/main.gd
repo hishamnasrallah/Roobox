@@ -36,6 +36,9 @@ func _ready() -> void:
 	if OS.has_feature("dedicated_server") or args.has("--server"):
 		_run_server(args)
 		return
+	if args.has("--librarytest"):
+		add_child(load("res://scripts/debug/library_test.gd").new())
+		return
 	if args.has("--scripttest"):
 		add_child(load("res://scripts/debug/script_test.gd").new())
 		return

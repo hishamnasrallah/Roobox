@@ -215,7 +215,7 @@ static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 		var sz := size(p)
 		var rot := Vector3(0, yaw(p), 0)
 		var col: Color = COLORS[int(p["c"])]
-		if t in SOLID and (p.has("m") or p.has("n")):
+		if (t in SOLID or t == "kill") and (p.has("m") or p.has("n")):
 			var node := _dynamic_part(parent, b, p)
 			node.set_meta("part_index", i)
 			(reg["by_index"] as Dictionary)[i] = node
@@ -405,6 +405,11 @@ static func _dynamic_part(parent: Node3D, b: WorldBuilder, p: Dictionary) -> Nod
 	mi.mesh = b.unit_mesh(shape)
 	mi.scale = sz
 	mi.material_override = Materials.material(str(p.get("mat", "plastic")), COLORS[int(p["c"])]) if p.get("mat", "plastic") != "plastic" else Fx.block_material(COLORS[int(p["c"])])
+	if t == "kill":
+		mi.material_override = Fx.glow_material(Color(1.0, 0.3, 0.1), 2.0)
+		var kz := KillZone.new()
+		kz.setup(sz + Vector3(0.1, 0.25, 0.1))
+		body.add_child(kz)
 	body.add_child(mi)
 	var cs := CollisionShape3D.new()
 	cs.name = "Shape"

@@ -52,6 +52,13 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 كل لعبة: SOLO / PLAY ONLINE / HOST ON WI-FI / JOIN. بالألعاب الجماعية السيرفر (أو الـ Host) هو الحَكَم على توقيت الجولات.
 لإضافة لعبة جديدة: كلاس يورث `Experience` (العالم) + اختيارياً `GameMode` (منطق الجولات) + سطر بـ `Catalog.ENTRIES`.
 
+## مكتبة الألعاب (208 لعبة)
+
+13 نوع × 16 ثيم، كلها ألعاب أصلية مولّدة من نفس صيغة المحرر:
+- **الأنواع:** Obby، Tower، Parkour، Maze، Floor is Lava، Coin Hunt، Sky Islands، Race، Trampoline Park، Vanishing Path، Button Doors، Water Course، Hangout.
+- **الثيمات:** Meadow، Desert، Frozen، Candy، Galaxy، Jungle، Ocean، Volcano، Castle، City، Neon، Autumn، Cloud، Crystal، Farm، Ancient.
+- بتبويب PLAY: بحث + فلترة حسب النوع. كل لعبة: PLAY SOLO / HOST / JOIN / **REMIX IN STUDIO** (نسخة بتعدّل عليها).
+
 ## Roobox Studio (اصنع لعبتك)
 
 من تبويب **CREATE** ← **+ NEW GAME**:
@@ -140,6 +147,7 @@ game/                      مشروع Godot
     studio/                المحرر (studio.gd) + صيغة الألعاب (level.gd)
     scripting/             مفسّر RooScript + ScriptHost + القوالب
     avatar/                قطع متجر الأفاتار
+    library/               مولّد مكتبة الـ 208 لعبة
 server/Dockerfile          صورة السيرفر المستقل
 backend/                   docker compose (Nakama + Postgres + game) + Lua modules
 docs/ROADMAP.md            خطة المراحل

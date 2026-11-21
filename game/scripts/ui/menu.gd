@@ -14,6 +14,12 @@ var _tab_buttons: Dictionary = {}
 var _busy_buttons: Array[Button] = []
 var _swatch_rows: Dictionary = {}
 var _tab: String = ""
+var _lib_genre: String = ""
+var _lib_query: String = ""
+var _lib_shown: int = 24
+var _lib_grid: GridContainer
+var _lib_more: Button
+var _lib_count: Label
 
 
 func _ready() -> void:
@@ -197,6 +203,7 @@ func _build_discover() -> void:
 	for e: Dictionary in Catalog.ENTRIES:
 		if not e.get("hidden", false):
 			grid.add_child(_card(e))
+	_build_library()
 	_text(_content, "Community games", 34, Color(1.0, 0.85, 0.3))
 	if not Backend.online:
 		_text(_content, "Connect an account server (SETTINGS) to play games made by other players.", 20, Color(1, 1, 1, 0.6))
@@ -206,6 +213,147 @@ func _build_discover() -> void:
 	_content.add_child(box)
 	_text(box, "Loading...", 20, Color(1, 1, 1, 0.6))
 	_load_community(box)
+
+
+# ------------------------------------------------------------- library ---
+
+func _build_library() -> void:
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	_content.add_child(head)
+	var t := _text(head, "Game library", 34, Color(1.0, 0.85, 0.3))
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_lib_count = _text(head, "", 18, Color(1, 1, 1, 0.7))
+	var search := UiStyle.line_edit("Search games...", 22)
+	search.text = _lib_query
+	search.text_changed.connect(_on_lib_search)
+	_content.add_child(search)
+	var chips_scroll := ScrollContainer.new()
+	chips_scroll.custom_minimum_size.y = 56
+	chips_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_content.add_child(chips_scroll)
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", 6)
+	chips_scroll.add_child(chips)
+	var all_genres: Array = [{"id": "", "title": "ALL"}]
+	all_genres.append_array(GameLibrary.GENRES)
+	for g: Dictionary in all_genres:
+		var gid: String = g["id"]
+		var on := gid == _lib_genre
+		var col: Color = GameLibrary.GENRE_COLORS.get(gid, Color(0.4, 0.45, 0.6))
+		var chip := UiStyle.button(str(g["title"]).to_upper(), col.darkened(0.1) if on else Color(0.22, 0.26, 0.4), 15, 46)
+		chip.custom_minimum_size.x = 90
+		chip.pressed.connect(func() -> void: _set_lib_genre(gid))
+		chips.add_child(chip)
+	_lib_grid = GridContainer.new()
+	_lib_grid.columns = 3
+	_lib_grid.add_theme_constant_override("h_separation", 10)
+	_lib_grid.add_theme_constant_override("v_separation", 10)
+	_content.add_child(_lib_grid)
+	_lib_more = UiStyle.button("SHOW MORE", Color(0.3, 0.36, 0.55), 20, 56)
+	_lib_more.pressed.connect(_lib_show_more)
+	_content.add_child(_lib_more)
+	_refresh_library()
+
+
+func _lib_show_more() -> void:
+	_lib_shown += 24
+	_refresh_library()
+
+
+func _on_lib_search(t: String) -> void:
+	_lib_query = t.strip_edges().to_lower()
+	_lib_shown = 24
+	_refresh_library()
+
+
+func _set_lib_genre(gid: String) -> void:
+	_lib_genre = gid
+	_lib_shown = 24
+	open_tab("PLAY")
+
+
+func _refresh_library() -> void:
+	if _lib_grid == null or not is_instance_valid(_lib_grid):
+		return
+	for ch in _lib_grid.get_children():
+		ch.queue_free()
+	var matches: Array = []
+	for e: Dictionary in GameLibrary.all():
+		if _lib_genre != "" and e["genre"] != _lib_genre:
+			continue
+		if _lib_query != "" and not str(e["title"]).to_lower().contains(_lib_query):
+			continue
+		matches.append(e)
+	_lib_count.text = "%d games" % matches.size()
+	for i in mini(_lib_shown, matches.size()):
+		_lib_grid.add_child(_lib_card(matches[i]))
+	_lib_more.visible = matches.size() > _lib_shown
+
+
+func _lib_card(e: Dictionary) -> Control:
+	var col: Color = e["color"]
+	var b := UiStyle.button("%s\n%s" % [e["title"], str(e["genre"]).to_upper()], col.darkened(0.35), 16, 84)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := UiStyle.box(col.darkened(0.35), 14, 8)
+	sb.border_color = col
+	sb.set_border_width_all(3)
+	b.add_theme_stylebox_override("normal", sb)
+	var gid: String = e["id"]
+	b.pressed.connect(func() -> void: _show_library_detail(gid))
+	return b
+
+
+func _show_library_detail(game_id: String) -> void:
+	Sfx.play("click")
+	for ch in _content.get_children():
+		ch.queue_free()
+	_busy_buttons.clear()
+	var e := GameLibrary.entry(game_id)
+	var col: Color = e["color"]
+	var back := UiStyle.button("< ALL GAMES", Color(0.3, 0.33, 0.45), 18, 46)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	back.custom_minimum_size.x = 200
+	back.pressed.connect(func() -> void: open_tab("PLAY"))
+	_content.add_child(back)
+	_text(_content, e["title"], 44, col.lightened(0.35))
+	_text(_content, e["desc"], 22, Color(1, 1, 1, 0.9))
+	_text(_content, "Type: %s   -   Theme: %s" % [str(e["genre"]).to_upper(), str(e["theme"]).to_upper()], 18, Color(1, 1, 1, 0.6))
+	for spec in [["PLAY SOLO", Color(0.2, 0.72, 0.35), "offline"], ["HOST ON WI-FI", Color(0.25, 0.5, 0.95), "host"]]:
+		var b := UiStyle.button(spec[0], spec[1])
+		var mode: String = spec[2]
+		b.pressed.connect(func() -> void: _play_library(game_id, mode))
+		_content.add_child(b)
+		_busy_buttons.append(b)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	var addr := UiStyle.line_edit("Host IP  e.g. 192.168.1.5")
+	addr.text = Game.server_address
+	addr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(addr)
+	var join := UiStyle.button("JOIN", Color(1.0, 0.55, 0.2))
+	join.custom_minimum_size = Vector2(150, 72)
+	join.pressed.connect(func() -> void: _join("ugc", addr.text))
+	row.add_child(join)
+	var remix := UiStyle.button("REMIX IN STUDIO", Color(0.95, 0.55, 0.2))
+	remix.pressed.connect(func() -> void: _remix_library(game_id))
+	_content.add_child(remix)
+	_text(_content, "REMIX copies this game into your CREATE list so you can change anything.", 16, Color(1, 1, 1, 0.6))
+
+
+func _play_library(game_id: String, mode: String) -> void:
+	Game.pending_level = GameLibrary.generate(game_id)
+	Game.testing = false
+	_play("ugc", mode, "")
+
+
+func _remix_library(game_id: String) -> void:
+	var lvl := GameLibrary.generate(game_id)
+	lvl["name"] = (str(lvl["name"]) + " Remix").substr(0, 32)
+	var slot := Level.new_slot()
+	Level.save_slot(slot, lvl)
+	studio_requested.emit(slot)
 
 
 func _load_community(box: VBoxContainer) -> void:
