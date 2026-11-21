@@ -69,11 +69,22 @@ var language: String = "en"
 
 
 func _ready() -> void:
+	_setup_font()
 	var t := Translation.new()
 	t.locale = "ar"
 	for k: String in AR:
 		t.add_message(k, AR[k])
 	TranslationServer.add_translation(t)
+
+
+## Cairo (OFL) covers Arabic + Latin; used as the default UI/3D-label font.
+func _setup_font() -> void:
+	var base: Variant = load("res://fonts/Cairo.ttf")
+	if base is Font:
+		var fv := FontVariation.new()
+		fv.base_font = base
+		fv.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 700}
+		ThemeDB.fallback_font = fv
 
 
 func set_language(lang: String) -> void:
