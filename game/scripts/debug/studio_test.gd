@@ -262,9 +262,9 @@ end)
 		[coins_before, Game.lifetime_coins])
 	var door_index := -1
 	var lparts: Array = (ex.get("level") as Dictionary)["parts"] if ex != null else []
-	for i in lparts.size():
-		if str((lparts[i] as Dictionary).get("n", "")) == "door":
-			door_index = i
+	for li in lparts.size():
+		if str((lparts[li] as Dictionary).get("n", "")) == "door":
+			door_index = li
 	main.call("_on_ugc_touched", "door#%d" % door_index)
 	await get_tree().process_frame
 	_check(Game.lifetime_coins == coins_before + 14, "per-part touch tokens reach on_touch", [door_index, Game.lifetime_coins])
