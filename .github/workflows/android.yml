@@ -219,14 +219,13 @@ jobs:
       - name: Build AAB with Gradle
         shell: bash
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          godot --headless --path game --import > /dev/null 2>&1 || true
-          godot --headless --path game --install-android-build-template 2>&1 | tail -5
-          ls game/android/build | head -20 || true
+          (yes | timeout 120 sdkmanager --licenses > /dev/null 2>&1) || true
+          timeout 300 godot --headless --path game --import > /dev/null 2>&1 || true
           mkdir -p build/release
           export GRADLE_OPTS="-Dorg.gradle.daemon=false"
-          timeout 1500 godot --headless --verbose --path game --export-release "Android Release" "$GITHUB_WORKSPACE/build/release/roobox.aab" 2>&1 \
-            | grep -vE "fontconfig|os_linuxbsd" | tail -150
+          timeout 1200 godot --headless --verbose --path game --install-android-build-template \
+            --export-release "Android Release" "$GITHUB_WORKSPACE/build/release/roobox.aab" 2>&1 \
+            | grep -vE "fontconfig|os_linuxbsd" | tee release.log
           ls -la build/release
           test -s build/release/roobox.aab
 
