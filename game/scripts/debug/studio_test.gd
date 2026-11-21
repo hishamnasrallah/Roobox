@@ -97,6 +97,16 @@ func _run() -> void:
 	st.select(st._entry_of_part(p1))
 	st.name_selected("door")
 
+	# --- AIR building on the plane ---
+	st.set_tool("build")
+	st.set_preset("block")
+	st.set_build_height(10.0)
+	var pp := st.plane_point(Vector3(3.2, 30, 3.4), Vector3(0, -1, 0))
+	_check(pp.is_equal_approx(Vector3(3.2, 10, 3.4)), "ray meets the build plane", pp)
+	var air := st.place_at(pp, Vector3.UP)
+	_check(_p(air) == Vector3(3, 11, 3), "place a block in the air", air)
+	st.set_build_height(0.0)
+
 	var bad := st.set_script_text("on_touch('door', function(p)\n  p:give_coins(")
 	_check(bad.begins_with("line "), "script syntax errors are reported", bad)
 	var good := st.set_script_text("""on_start(function()

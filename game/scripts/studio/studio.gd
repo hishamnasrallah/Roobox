@@ -49,6 +49,10 @@ var _sel_info: Label
 var _sel_motion: Button
 var _sel_name: LineEdit
 var _script_panel: Control
+## Build plane: lets you place parts in the air at the camera focus height.
+var air_mode: bool = false
+var _plane: MeshInstance3D
+var _air_button: Button
 var _code: CodeEdit
 var _script_status: Label
 
@@ -106,6 +110,9 @@ func _process(delta: float) -> void:
 	var orbit := Basis.from_euler(Vector3(_pitch, _yaw, 0))
 	_cam.global_transform = Transform3D(orbit, _focus + orbit * Vector3(0, 0, _dist))
 	_marker.global_position = _focus
+	_update_plane()
+	if air_mode and _air_button != null and _air_button.text != "AIR %d" % int(build_height()):
+		_air_button.text = "AIR %d" % int(build_height())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -127,9 +134,16 @@ func _unhandled_input(event: InputEvent) -> void:
 func use_tool_at(screen_pos: Vector2) -> void:
 	var from := _cam.project_ray_origin(screen_pos)
 	var dir := _cam.project_ray_normal(screen_pos)
-	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 600.0, 1)
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var hit: Dictionary = {}
+	if not (air_mode and tool == "build"):
+		var q := PhysicsRayQueryParameters3D.create(from, from + dir * 600.0, 1)
+		hit = get_world_3d().direct_space_state.intersect_ray(q)
 	if hit.is_empty():
+		# Nothing hit (or AIR mode): build on the plane at the focus height.
+		if tool == "build":
+			var pp := plane_point(from, dir)
+			if pp.is_finite():
+				place_at(pp, Vector3.UP)
 		return
 	var collider: Object = hit["collider"]
 	match tool:
@@ -238,6 +252,54 @@ func undo() -> void:
 				_rebuild_entry(e3)
 	_update_selection()
 	_refresh_ui()
+
+
+## Height of the build plane (snapped to the grid).
+func build_height() -> float:
+	return roundf(_focus.y)
+
+
+func set_build_height(h: float) -> void:
+	_focus.y = h
+
+
+## Where a ray meets the build plane (Vector3.INF if it doesn't).
+func plane_point(origin: Vector3, dir: Vector3) -> Vector3:
+	if absf(dir.y) < 0.0001:
+		return Vector3.INF
+	var t := (build_height() - origin.y) / dir.y
+	if t < 0.0 or t > 400.0:
+		return Vector3.INF
+	return origin + dir * t
+
+
+func toggle_air() -> void:
+	air_mode = not air_mode
+	_say("AIR mode: tap anywhere to build at height %d (UP/DOWN to change)" % int(build_height()) if air_mode else "AIR mode off: parts stick to surfaces")
+	_refresh_ui()
+
+
+func _update_plane() -> void:
+	if _plane == null:
+		_plane = MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(48, 48)
+		_plane.mesh = pm
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_texture = Fx.tile_texture()
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_plane.material_override = m
+		_plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_plane)
+	_plane.visible = tool == "build"
+	var m2 := _plane.material_override as StandardMaterial3D
+	m2.albedo_color = Color(0.4, 0.8, 1.0, 0.35 if air_mode else 0.12)
+	_plane.global_position = Vector3(roundf(_focus.x), build_height() + 0.01, roundf(_focus.z))
 
 
 func rotate_preset() -> void:
@@ -571,6 +633,10 @@ func _build_ui() -> void:
 	_rot_button.custom_minimum_size.x = 130
 	_rot_button.pressed.connect(rotate_preset)
 	tools.add_child(_rot_button)
+	_air_button = UiStyle.button("AIR", Color(0.25, 0.3, 0.48), 18, 50)
+	_air_button.custom_minimum_size.x = 90
+	_air_button.pressed.connect(toggle_air)
+	tools.add_child(_air_button)
 	for spec in [["UP", 1.0], ["DOWN", -1.0]]:
 		var vb := UiStyle.button(spec[0], Color(0.3, 0.33, 0.45), 18, 50)
 		vb.custom_minimum_size.x = 96
@@ -818,6 +884,10 @@ func _refresh_ui() -> void:
 		for st in ["normal", "hover", "pressed"]:
 			_color_buttons[i].add_theme_stylebox_override(st, sb)
 	_rot_button.text = "ROTATE %d" % (rot_steps * 90)
+	if _air_button != null:
+		_air_button.text = "AIR %d" % int(build_height()) if air_mode else "AIR"
+		_air_button.add_theme_stylebox_override("normal",
+			UiStyle.box(Color(0.2, 0.6, 0.8) if air_mode else Color(0.25, 0.3, 0.48), 18, 10))
 
 
 func _say(text: String) -> void:

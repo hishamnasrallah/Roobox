@@ -88,6 +88,25 @@ func _run() -> void:
 	_send(up)
 	await _wait(0.6)
 
+	# --- Step up a 0.5m ledge without jumping ---
+	var ledge := StaticBody3D.new()
+	var lcs := CollisionShape3D.new()
+	var lbox := BoxShape3D.new()
+	lbox.size = Vector3(8, 0.5, 2)
+	lcs.shape = lbox
+	ledge.add_child(lcs)
+	ledge.position = Vector3(30, 0.25, 25)
+	main.add_child(ledge)
+	player.teleport(Vector3(30, 0.5, 30))
+	await _wait(0.6)
+	Input.action_press("move_forward")
+	await _wait(1.2)
+	Input.action_release("move_forward")
+	_log("step-up z=%.2f y=%.2f" % [player.global_position.z, player.global_position.y])
+	_check(player.global_position.z < 24.0, "walks up a 0.5m step without jumping")
+	ledge.queue_free()
+	await _wait(0.3)
+
 	# --- Touch jump button ---
 	var y0 := player.global_position.y
 	var jc := Vector2(vis.x - 175.0, vis.y - 175.0)

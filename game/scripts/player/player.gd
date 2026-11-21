@@ -109,6 +109,8 @@ func _physics_process(delta: float) -> void:
 
 	_prev_vy = velocity.y
 	move_and_slide()
+	if is_on_wall() and (on_floor or _was_on_floor) and wish.length_squared() > 0.01 and velocity.y <= 0.5:
+		_try_step_up(wish.normalized())
 
 	var now_on_floor := is_on_floor()
 	if now_on_floor and not _was_on_floor:
@@ -144,6 +146,23 @@ func _process(delta: float) -> void:
 	avatar.rotation.y = lerp_angle(avatar.rotation.y, _target_yaw, 1.0 - exp(-turn_speed * delta))
 	var hs := Vector2(velocity.x, velocity.z).length()
 	avatar.animate(delta, hs / max_speed, is_on_floor() or _dead, velocity.y)
+
+
+const STEP_HEIGHT := 0.65
+
+
+## Climbs small ledges (stairs, single blocks) without jumping.
+func _try_step_up(dir: Vector3) -> void:
+	var xf := global_transform
+	var up := Vector3(0, STEP_HEIGHT, 0)
+	if test_move(xf, up):
+		return
+	var raised := xf.translated(up)
+	if test_move(raised, dir * 0.3):
+		return
+	global_position += up + dir * 0.18
+	move_and_collide(Vector3(0, -STEP_HEIGHT, 0))
+	velocity.y = 0.0
 
 
 func get_speed_ratio() -> float:

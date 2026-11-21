@@ -5,7 +5,7 @@ const WAIT_TIME := 8.0
 const END_TIME := 4.0
 const MAX_TIME := 150.0
 const TOP := 92.0
-const START_H := -1.0
+const START_H := -4.0
 
 var state: String = "waiting"
 var timer: float = WAIT_TIME
@@ -31,7 +31,7 @@ func _process(delta: float) -> void:
 				emit_event({"t": "state", "s": "running", "round": round_no, "h": lava_h, "e": 0.0})
 		"running":
 			elapsed += delta
-			lava_h += (0.55 + 0.012 * elapsed) * delta
+			lava_h += (0.45 + 0.011 * elapsed) * delta
 			_tick += delta
 			if _tick >= 0.2:
 				_tick = 0.0

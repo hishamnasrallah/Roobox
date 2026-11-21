@@ -58,36 +58,51 @@ func setup() -> void:
 	_place_lava()
 
 
+const START_PAD_TOP := 0.6
+
+
 func _build_tower() -> void:
-	var colors := World.PALETTE
-	var p := Vector3(0, 0, 18)
-	var ang := -PI * 0.5
-	for i in 64:
-		ang += _rng.randf_range(0.5, 1.2)
-		var step := _rng.randf_range(3.8, 4.6)
-		var next := p + Vector3(cos(ang) * step, _rng.randf_range(1.25, 1.6), sin(ang) * step)
-		var flat := Vector2(next.x, next.z)
-		if flat.length() > 24.0:
-			# Steer back toward the middle.
-			ang += PI * 0.6
-			next = p + Vector3(cos(ang) * step, next.y - p.y, sin(ang) * step)
-		p = next
-		var s := 3.2 if i < 30 else 2.6
-		_b.box(p - Vector3(0, 0.3, 0), Vector3(s, 0.6, s), colors[i % colors.size()], true, "tiled")
-		if _rng.randf() < 0.55:
-			var side := p + Vector3(_rng.randf_range(-7, 7), _rng.randf_range(-1.0, 1.0), _rng.randf_range(-7, 7))
-			if Vector2(side.x, side.z).length() < 30.0:
-				_b.box(side - Vector3(0, 0.3, 0), Vector3(2.6, 0.6, 2.6), colors[(i + 3) % colors.size()], true, "tiled")
-	# Summit.
-	_b.box(p + Vector3(0, 1.2, 0), Vector3(7, 0.8, 7), Color(1.0, 0.92, 0.6), true, "tiled")
+	# Start pad in the middle: everyone spawns here, the climb starts right next to it.
+	_b.box(Vector3(0, START_PAD_TOP * 0.5, 0), Vector3(9, START_PAD_TOP, 9), Color(0.95, 0.95, 1.0), true, "tiled")
+	var top := Vector3.ZERO
+	for path in 2:
+		top = _build_path(Vector3(0, START_PAD_TOP, 0), PI * path + _rng.randf_range(-0.3, 0.3), path)
+	# Summit on the last path's top.
+	_b.box(top + Vector3(0, 1.0, 0), Vector3(7, 0.8, 7), Color(1.0, 0.92, 0.6), true, "tiled")
 	var flag := Label3D.new()
 	flag.text = "SUMMIT"
 	flag.font_size = 120
 	flag.outline_size = 24
 	flag.modulate = Color(1, 0.9, 0.4)
 	flag.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	flag.position = p + Vector3(0, 5, 0)
+	flag.position = top + Vector3(0, 5, 0)
 	add_child(flag)
+
+
+## One climbing path: platforms close together, gentle at first.
+func _build_path(start: Vector3, ang: float, path: int) -> Vector3:
+	var colors := World.PALETTE
+	var p := start
+	for i in 66:
+		var early := i < 10
+		ang += _rng.randf_range(0.35, 0.9)
+		var step := _rng.randf_range(3.4, 3.9) if early else _rng.randf_range(3.6, 4.3)
+		var rise := _rng.randf_range(0.8, 1.0) if early else _rng.randf_range(1.0, 1.35)
+		if i == 0:
+			step = 5.6
+			rise = 0.7
+		var next := p + Vector3(cos(ang) * step, rise, sin(ang) * step)
+		if Vector2(next.x, next.z).length() > 25.0:
+			ang += PI * 0.65
+			next = p + Vector3(cos(ang) * step, rise, sin(ang) * step)
+		p = next
+		var s := 3.2 if i < 36 else 2.7
+		_b.box(p - Vector3(0, 0.3, 0), Vector3(s, 0.6, s), colors[(i + path * 3) % colors.size()], true, "tiled")
+		if i > 4 and _rng.randf() < 0.4:
+			var side := p + Vector3(_rng.randf_range(-6, 6), _rng.randf_range(-1.0, 0.6), _rng.randf_range(-6, 6))
+			if Vector2(side.x, side.z).length() < 30.0:
+				_b.box(side - Vector3(0, 0.3, 0), Vector3(2.6, 0.6, 2.6), colors[(i + 5) % colors.size()], true, "tiled")
+	return p
 
 
 func on_player_ready(_p: Player) -> void:
@@ -124,8 +139,8 @@ func _join_round() -> void:
 		return
 	_alive = true
 	_survive_t = 0.0
-	var a := _rng.randf() * TAU
-	player.teleport(Vector3(cos(a) * 8.0, 0.6, sin(a) * 8.0))
+	var a := randf() * TAU
+	player.teleport(Vector3(cos(a) * 2.5, START_PAD_TOP + 0.6, sin(a) * 2.5))
 	_toast("CLIMB! THE LAVA IS RISING", Color(1.0, 0.55, 0.2))
 
 
