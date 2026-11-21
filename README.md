@@ -52,21 +52,26 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 كل لعبة: SOLO / PLAY ONLINE / HOST ON WI-FI / JOIN. بالألعاب الجماعية السيرفر (أو الـ Host) هو الحَكَم على توقيت الجولات.
 لإضافة لعبة جديدة: كلاس يورث `Experience` (العالم) + اختيارياً `GameMode` (منطق الجولات) + سطر بـ `Catalog.ENTRIES`.
 
-## مكتبة الألعاب (208 لعبة)
+## مكتبة الألعاب (288 لعبة)
 
-13 نوع × 16 ثيم، كلها ألعاب أصلية مولّدة من نفس صيغة المحرر:
-- **الأنواع:** Obby، Tower، Parkour، Maze، Floor is Lava، Coin Hunt، Sky Islands، Race، Trampoline Park، Vanishing Path، Button Doors، Water Course، Hangout.
+18 نوع × 16 ثيم، كلها ألعاب أصلية مولّدة من نفس صيغة المحرر. **كل نوع إله خريطتين مختلفتين بالبنية** (مش بس بالألوان) و3 مستويات صعوبة:
+- **الأنواع (الخريطة أ / ب):** Obby (مستقيم / تسلّق حلزوني حوالين عمود)، Tower (درج حلزوني / برج طوابق كل طابق إله عائق وطريقة طلوع)، Parkour (عوائق / أسطح مباني)، Maze (بجدران / متاهة معلّقة فوق اللافا)، Floor is Lava (حلزون / أعمدة درج)، Coin Hunt (أرض مفتوحة / قرية بيوت)، Sky Islands (سلسلة / حلقة جزر + تاج)، Race (حلبة / نزلة من برج)، Trampoline Park (برج / ساحة)، Vanishing Path (مسار / شبكة)، Button Doors (ممر / شبكة غرف)، Water Course (برك / بحيرة)، Hangout (ديسكو / حديقة).
+- **أنواع جديدة بميكانيك مختلف:** **Tycoon** (مصاري كل ثانية + أزرار شراء بتبني المصنع/المزرعة)، **Floor Fall** (البلاط بيوقع بعد ما تدوس عليه)، **Dropper** (سقوط حر بين عوائق لافا لبركة)، **Spinner Survival** (اقفز عن العصا الدوّارة)، **Button Hunt** (دوّر على أزرار مخبّاة لتفتح الجائزة).
 - **الثيمات:** Meadow، Desert، Frozen، Candy، Galaxy، Jungle، Ocean، Volcano، Castle، City، Neon، Autumn، Cloud، Crystal، Farm، Ancient.
-- بتبويب PLAY: بحث + فلترة حسب النوع. كل لعبة: PLAY SOLO / HOST / JOIN / **REMIX IN STUDIO** (نسخة بتعدّل عليها).
+- **صور حقيقية:** كل لعبة إلها صورة 3D بتنرسم من خريطتها أول مرة بتظهر وبتنحفظ بالجهاز.
+- تبويب PLAY: صف أفقي لكل نوع (بتسحبه بإصبعك) + بحث + فلترة. كل لعبة: PLAY SOLO / HOST / JOIN / **REMIX IN STUDIO**.
 
 ## Roobox Studio (اصنع لعبتك)
 
 من تبويب **CREATE** ← **+ NEW GAME**:
-- **الكاميرا:** جويستك للتحريك، سحب للدوران، pinch للزووم، UP/DOWN للارتفاع (بالكمبيوتر: WASD + Q/E + الماوس).
-- **الأدوات:** BUILD (المس مكان لتحط قطعة — بتلزق على سطح القطعة اللي لمستها وبتنضبط عالشبكة)، PAINT، DELETE، ROTATE، UNDO.
-- **القطع:** BLOCK، PLATE، FLOOR، BEAM، WALL، PILLAR، RAMP، BALL، ROUND + قطع خاصة: SPAWN، CHECKPOINT، LAVA، JUMP PAD، COIN، FINISH.
-- **TEST** بيشغّل لعبتك فوراً (MENU بيرجعك للمحرر)، **SAVE** على الجهاز، **PUBLISH** بينشرها بـ COMMUNITY.
-- الألعاب المنشورة بتبيّن بتبويب PLAY تحت **Community games** — PLAY أو HOST على الـ Wi-Fi (اللاعبين اللي بيعملوا JOIN بيستلموا اللعبة تلقائياً).
+- **الكاميرا:** إصبع واحد للدوران (ولمسة سريعة = استعمال الأداة)، إصبعين للزووم والتحريك، UP/DOWN للارتفاع. بالكمبيوتر: WASD + Q/E + الماوس.
+- **الأدوات:** SELECT، **MOVE / SCALE / ROTATE بمقابض 3D بتسحبها**، BUILD، PAINT، DELETE، **TERRAIN** (مولّد تضاريس: تلال، جزيرة، جبال، صحرا، ثلج، وادي)، **EXPLORER** (قائمة القطع والمجموعات).
+- **الشبكة والتدوير:** GRID 0.5 / 1 / 2 / 4 — TURN 15° / 45° / 90°، AIR للبناء بالهوا، MULTI لتحديد أكثر من قطعة، FOCUS.
+- **الخصائص:** لون، مادة، شفافية، COLLIDE (تمشي من خلالها)، ANCHORED (تقع وتنزاح بالفيزياء)، LOCK، حركة، اسم للسكربت، نص اللافتة، GROUP / UNGROUP، COPY، DELETE، **UNDO + REDO**.
+- **القطع:** قطع أساسية (مكعب، بلوك، لوح، جدار، عمود، Wedge، **Corner Wedge**، درج، مخروط، كرة، اسطوانة، **Truss** بتتسلّقه) + قطع لعب (Spawn، Checkpoint، Finish، لافا، أشواك، Jump/Speed pad، حزام، بوابة، عملة، سلّم) + طبيعة (مي، شجرة، لافتة) + مؤثرات (ضوء، **نار، دخان، لمعة**).
+- **MODELS:** 20 نموذج جاهز (بيت، برج، سور قلعة، جسر، سياج، عمود إنارة، أشجار، صخور، طاولة، سرير، كارت، قوس، نافورة، برج مراقبة، نار مخيم، بسطة، علم، مجموعة أوبي) بتنحط كمجموعة وحدة.
+- **TEST** بيشغّل لعبتك فوراً، **SAVE** على الجهاز، **PUBLISH** بينشرها بـ COMMUNITY.
+- اختصارات الكمبيوتر: Ctrl+Z / Ctrl+Y، Ctrl+D نسخ، Ctrl+G تجميع، Del حذف، F تركيز، R تدوير، 1-5 للأدوات.
 
 ## السكربتات (RooScript)
 
@@ -81,7 +86,7 @@ on_touch("button", function(player)
 end)
 ```
 
-- **أحداث:** `on_start` · `on_touch(name, fn)` · `after(sec, fn)` · `every(sec, fn)` · `cancel(id)` · `time()`
+- **أحداث:** `on_start` · `on_touch(name, fn(player, part))` (part = القطعة بالضبط اللي انلمست) · `after(sec, fn)` · `every(sec, fn)` · `cancel(id)` · `time()`
 - **القطع:** `world.find(name)` ← `set_color` · `set_visible` · `set_solid` · `move_to` · `move_by` · `position` · `destroy`
 - **اللاعب:** `teleport` · `kill` · `give_coins` · `set_speed` · `set_jump` · `message` · `position` · `player.name`
 - **الواجهة والنقاط:** `ui.message` · `ui.status` · `score.add/set/get`
@@ -147,7 +152,7 @@ game/                      مشروع Godot
     studio/                المحرر (studio.gd) + صيغة الألعاب (level.gd)
     scripting/             مفسّر RooScript + ScriptHost + القوالب
     avatar/                قطع متجر الأفاتار
-    library/               مولّد مكتبة الـ 208 لعبة
+    library/               مولّد مكتبة الـ 288 لعبة
 server/Dockerfile          صورة السيرفر المستقل
 backend/                   docker compose (Nakama + Postgres + game) + Lua modules
 docs/ROADMAP.md            خطة المراحل
