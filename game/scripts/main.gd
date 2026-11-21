@@ -57,6 +57,7 @@ func _ready() -> void:
 	Network.player_left.connect(_on_player_left)
 	Network.state_received.connect(_on_state_received)
 	Network.mode_event.connect(_on_network_mode_event)
+	Network.script_touched.connect(_on_script_touched)
 
 	if Game.resume_studio != "":
 		var resume := Game.resume_studio
@@ -349,7 +350,7 @@ func _start_game(exp_id: String) -> void:
 	if Network.mode == "offline" or Network.mode == "host":
 		_start_mode(exp_id)
 	if exp_id == "ugc":
-		Network.snapshot_provider = func() -> Dictionary: return {"t": "level", "level": Game.pending_level}
+		_setup_ugc_scripts()
 
 	var title: String = Catalog.get_entry(exp_id)["title"]
 	match Network.mode:
@@ -364,6 +365,65 @@ func _start_game(exp_id: String) -> void:
 	for id: int in Network.players:
 		if id != Network.my_id():
 			_add_remote(id, Network.players[id])
+
+
+# ------------------------------------------------------------ scripts ---
+
+func _setup_ugc_scripts() -> void:
+	var ugc := experience
+	ugc.connect("touched", _on_ugc_touched)
+	if (Network.mode == "offline" or Network.mode == "host") and ugc.call("has_script"):
+		var host := ScriptHost.new()
+		host.name = "ScriptHost"
+		host.source = str((ugc.get("level") as Dictionary).get("script", ""))
+		host.part_names = ugc.call("part_names")
+		host.part_pos_provider = func(n: String) -> Vector3: return ugc.call("part_position", n)
+		host.player_pos_provider = _player_position
+		host.player_name_provider = _player_name
+		host.event.connect(_on_authority_event)
+		host.log_line.connect(_on_script_log)
+		game_mode = host
+		add_child(host)
+	Network.snapshot_provider = _ugc_snapshot
+
+
+func _ugc_snapshot() -> Dictionary:
+	var snap := {"t": "level", "level": Game.pending_level}
+	if game_mode is ScriptHost:
+		snap["state"] = (game_mode as ScriptHost).snapshot()
+	return snap
+
+
+func _on_ugc_touched(part_name: String) -> void:
+	if game_mode is ScriptHost:
+		(game_mode as ScriptHost).fire_touch(part_name, Network.my_id())
+	elif Network.mode == "client":
+		Network.send_script_touch(part_name)
+
+
+func _on_script_touched(peer_id: int, part_name: String) -> void:
+	if game_mode is ScriptHost:
+		(game_mode as ScriptHost).fire_touch(part_name, peer_id)
+
+
+func _on_script_log(text: String) -> void:
+	print("[script] ", text)
+	if hud != null and (Game.testing or text.begins_with("Script error") or text.begins_with("Warning")):
+		hud.add_chat_line(text, Color(1.0, 0.6, 0.5) if text.begins_with("Script") else Color(0.8, 0.9, 1.0))
+
+
+func _player_position(peer_id: int) -> Vector3:
+	if peer_id == Network.my_id() and player != null:
+		return player.global_position
+	if _remotes.has(peer_id):
+		return (_remotes[peer_id] as RemotePlayer).avatar.global_position
+	return Vector3.ZERO
+
+
+func _player_name(peer_id: int) -> String:
+	if peer_id == Network.my_id():
+		return Game.player_name
+	return str((Network.players.get(peer_id, {}) as Dictionary).get("name", "Player"))
 
 
 func _back_to_menu() -> void:

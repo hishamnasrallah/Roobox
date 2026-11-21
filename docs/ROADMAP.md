@@ -64,3 +64,10 @@
 - [x] مكافأة يومية
 - [ ] شراء/صرف موثّق على السيرفر (wallet بـ Nakama) بدل الجهاز
 - [ ] شراء عملات بـ Google Play Billing
+
+## المرحلة 6 — السكربتات (✅ النسخة الأولى)
+- [x] RooScript: مفسّر Lua subset مكتوب بـ GDScript (بيشتغل على كل الأجهزة بدون كود native)، sandbox + حد خطوات + أخطاء بأرقام أسطر
+- [x] API: أحداث (on_start/on_touch/after/every)، القطع، اللاعب، الواجهة، النقاط
+- [x] محرر سكربت بالـ Studio مع تلوين الكود، CHECK، و6 قوالب
+- [x] السكربت عند الـ authority وتأثيره منقول لكل اللاعبين + حالة للي بيدخل متأخر
+- [ ] Luau حقيقي (GDExtension) كخيار أداء لاحقاً، debugger، ModuleScripts

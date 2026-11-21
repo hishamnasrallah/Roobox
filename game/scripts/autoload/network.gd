@@ -19,6 +19,8 @@ signal chat_received(id: int, sender: String, text: String)
 signal welcomed(experience_id: String, snapshot: Dictionary)
 ## Round/state event from the authority's GameMode.
 signal mode_event(ev: Dictionary)
+## (authority only) a player touched a named scripted part.
+signal script_touched(peer_id: int, part_name: String)
 
 const DEFAULT_PORT := 7777
 const MAX_PLAYERS := 32
@@ -215,6 +217,18 @@ func send_mode_event(ev: Dictionary, reliable: bool = true) -> void:
 		_mode_event.rpc(ev)
 	else:
 		_mode_event_u.rpc(ev)
+
+
+## Client -> authority: "I touched this named part" (UGC scripts).
+func send_script_touch(part_name: String) -> void:
+	if mode == "client":
+		_script_touch.rpc_id(1, part_name.substr(0, 24))
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _script_touch(part_name: String) -> void:
+	if is_server():
+		script_touched.emit(multiplayer.get_remote_sender_id(), part_name.substr(0, 24))
 
 
 @rpc("authority", "call_remote", "reliable")

@@ -61,6 +61,26 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 - **TEST** بيشغّل لعبتك فوراً (MENU بيرجعك للمحرر)، **SAVE** على الجهاز، **PUBLISH** بينشرها بـ COMMUNITY.
 - الألعاب المنشورة بتبيّن بتبويب PLAY تحت **Community games** — PLAY أو HOST على الـ Wi-Fi (اللاعبين اللي بيعملوا JOIN بيستلموا اللعبة تلقائياً).
 
+## السكربتات (RooScript)
+
+بالمحرر: سمّي القطع (SELECT ← name) وبعدين **SCRIPT**. اللغة بأسلوب Lua، وفي قوالب جاهزة (DOOR، VANISH، SCORE، DISCO، BOOST، ELEVATOR):
+
+```lua
+on_touch("button", function(player)
+  local door = world.find("door")
+  door:set_solid(false)
+  ui.message(player.name .. " opened the door!", 2)
+  after(5, function() door:set_solid(true) end)
+end)
+```
+
+- **أحداث:** `on_start` · `on_touch(name, fn)` · `after(sec, fn)` · `every(sec, fn)` · `cancel(id)` · `time()`
+- **القطع:** `world.find(name)` ← `set_color` · `set_visible` · `set_solid` · `move_to` · `move_by` · `position` · `destroy`
+- **اللاعب:** `teleport` · `kill` · `give_coins` · `set_speed` · `set_jump` · `message` · `position` · `player.name`
+- **الواجهة والنقاط:** `ui.message` · `ui.status` · `score.add/set/get`
+- **اللغة:** متغيرات، جداول، دوال وclosures، `if/while/repeat/for/for-in`، `pairs/ipairs`، مكتبات `math/string/table`.
+- السكربت بيشتغل عند الـ Host (أو بالـ Solo) وتأثيره على العالم بيوصل لكل اللاعبين. فيه حد للخطوات بيوقف أي حلقة لا نهائية، وأخطاء بأرقام الأسطر.
+
 ## العالم
 
 جزيرة كبيرة فيها ساحة spawn و 4 بوابات:
@@ -118,6 +138,8 @@ game/                      مشروع Godot
     online/                Nakama REST client + خدمات الحساب
     experiences/           الألعاب: Experience + GameMode + Catalog (+ ugc.gd لألعاب الناس)
     studio/                المحرر (studio.gd) + صيغة الألعاب (level.gd)
+    scripting/             مفسّر RooScript + ScriptHost + القوالب
+    avatar/                قطع متجر الأفاتار
 server/Dockerfile          صورة السيرفر المستقل
 backend/                   docker compose (Nakama + Postgres + game) + Lua modules
 docs/ROADMAP.md            خطة المراحل

@@ -48,6 +48,9 @@ var _sel_panel: PanelContainer
 var _sel_info: Label
 var _sel_motion: Button
 var _sel_name: LineEdit
+var _script_panel: Control
+var _code: CodeEdit
+var _script_status: Label
 
 
 func _ready() -> void:
@@ -544,6 +547,7 @@ func _build_ui() -> void:
 	_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	top.add_child(_count_label)
 	for spec in [["UNDO", Color(0.4, 0.42, 0.55), undo], ["SAVE", Color(0.2, 0.6, 0.35), save],
+			["SCRIPT", Color(0.2, 0.5, 0.6), open_script],
 			["TEST", Color(0.95, 0.55, 0.2), _on_test], ["PUBLISH", Color(0.6, 0.35, 0.95), _on_publish],
 			["EXIT", Color(0.6, 0.3, 0.3), _on_exit]]:
 		var b := UiStyle.button(spec[0], spec[1], 20, 58)
@@ -682,6 +686,115 @@ func _build_ui() -> void:
 	_msg.offset_right = 500
 	_msg.offset_top = 90
 	root.add_child(_msg)
+
+
+# =============================================================== script ===
+
+func open_script() -> void:
+	if _script_panel == null:
+		_build_script_panel()
+	_code.text = str(level.get("script", ""))
+	_script_status.text = "Write Lua-style code. Tap a template to start."
+	_script_panel.visible = true
+	Game.input_blocked = true
+
+
+func close_script() -> void:
+	set_script_text(_code.text)
+	_script_panel.visible = false
+	Game.input_blocked = false
+
+
+## Stores the script on the level and returns "" or the first syntax error.
+func set_script_text(text: String) -> String:
+	if text.strip_edges() == "":
+		level.erase("script")
+		return ""
+	level["script"] = text.substr(0, Level.MAX_SCRIPT)
+	return RooScript.new().compile(text)
+
+
+func _check_script() -> void:
+	var err := RooScript.new().compile(_code.text)
+	_script_status.text = "No errors - press TEST to try it!" if err == "" else "Error: " + err
+	_script_status.label_settings.font_color = Color(0.5, 1.0, 0.6) if err == "" else Color(1.0, 0.5, 0.5)
+
+
+func _build_script_panel() -> void:
+	var root: Control = _ui.get_child(0)
+	_script_panel = PanelContainer.new()
+	_script_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_script_panel.offset_left = 24
+	_script_panel.offset_right = -24
+	_script_panel.offset_top = 16
+	_script_panel.offset_bottom = -16
+	_script_panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
+	root.add_child(_script_panel)
+	_touch.blockers.append(_script_panel)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	_script_panel.add_child(vb)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	vb.add_child(head)
+	var title := UiStyle.label(30, Color(1.0, 0.85, 0.3))
+	title.text = "SCRIPT"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	for tpl: Array in ScriptTemplates.TEMPLATES:
+		var tb := UiStyle.button(tpl[0], Color(0.3, 0.36, 0.55), 15, 44)
+		tb.custom_minimum_size.x = 100
+		var code_text: String = tpl[1]
+		tb.pressed.connect(func() -> void: _code.text = code_text)
+		head.add_child(tb)
+	var help := UiStyle.label(13, Color(1, 1, 1, 0.7))
+	help.text = ScriptTemplates.HELP
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(help)
+	_code = CodeEdit.new()
+	_code.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_code.gutters_draw_line_numbers = true
+	_code.indent_automatic = true
+	_code.indent_size = 2
+	_code.add_theme_font_size_override("font_size", 20)
+	_code.syntax_highlighter = _highlighter()
+	_code.focus_entered.connect(func() -> void: Game.input_blocked = true)
+	vb.add_child(_code)
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 8)
+	vb.add_child(foot)
+	_script_status = UiStyle.label(18)
+	_script_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_script_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	foot.add_child(_script_status)
+	for spec in [["CHECK", Color(0.25, 0.5, 0.95), _check_script],
+			["CLEAR", Color(0.6, 0.3, 0.3), _clear_code],
+			["DONE", Color(0.2, 0.72, 0.35), close_script]]:
+		var b := UiStyle.button(spec[0], spec[1], 18, 52)
+		b.custom_minimum_size.x = 120
+		b.pressed.connect(spec[2])
+		foot.add_child(b)
+
+
+func _clear_code() -> void:
+	_code.text = ""
+
+
+func _highlighter() -> CodeHighlighter:
+	var h := CodeHighlighter.new()
+	h.number_color = Color(0.7, 0.9, 1.0)
+	h.symbol_color = Color(0.85, 0.85, 0.95)
+	h.function_color = Color(0.55, 0.85, 1.0)
+	h.member_variable_color = Color(0.9, 0.9, 1.0)
+	for kw in RooScript.KEYWORDS:
+		h.add_keyword_color(kw, Color(1.0, 0.55, 0.7))
+	for g in ["on_start", "on_touch", "after", "every", "cancel", "world", "ui", "score", "print", "math", "string", "table", "pairs", "ipairs"]:
+		h.add_member_keyword_color(g, Color(1.0, 0.85, 0.4))
+		h.add_keyword_color(g, Color(1.0, 0.85, 0.4))
+	h.add_color_region("--", "", Color(0.5, 0.6, 0.55), true)
+	h.add_color_region("\"", "\"", Color(0.6, 1.0, 0.6))
+	h.add_color_region("'", "'", Color(0.6, 1.0, 0.6))
+	return h
 
 
 func _refresh_ui() -> void:

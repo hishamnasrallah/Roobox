@@ -97,6 +97,21 @@ func _run() -> void:
 	st.select(st._entry_of_part(p1))
 	st.name_selected("door")
 
+	var bad := st.set_script_text("on_touch('door', function(p)\n  p:give_coins(")
+	_check(bad.begins_with("line "), "script syntax errors are reported", bad)
+	var good := st.set_script_text("""on_start(function()
+  world.find("door"):set_color(9)
+  score.set(3)
+  ui.status("hello")
+end)
+every(0.5, function() score.add(1) end)
+on_touch("door", function(p)
+  p:give_coins(7)
+  p:message("hi " .. p.name)
+end)
+""")
+	_check(good == "", "valid script compiles", good)
+
 	_check(st.save(), "save to disk")
 	var slot := st.slot
 	var loaded := Level.load_slot(slot)
@@ -116,6 +131,19 @@ func _run() -> void:
 	var reg: Dictionary = ex.get("registry") if ex != null else {}
 	var named: Array = (reg.get("by_name", {}) as Dictionary).get("door", [])
 	_check(named.size() == 1 and named[0] is MovingPlatform, "named moving part is a MovingPlatform in play", named)
+	var host: Node = main.get("game_mode")
+	_check(host is ScriptHost and (host as ScriptHost).last_error == "", "script host runs without errors",
+		(host as ScriptHost).last_error if host is ScriptHost else host)
+	_check(int(ex.get("score")) >= 5, "script timers update the score", ex.get("score"))
+	if named.size() == 1:
+		var mesh := (named[0] as Node).get_node_or_null("Mesh") as MeshInstance3D
+		var mat := mesh.material_override as StandardMaterial3D if mesh != null else null
+		_check(mat != null and mat.albedo_color.is_equal_approx(Level.COLORS[9]), "script recolors the named part")
+	var coins_before := Game.lifetime_coins
+	main.call("_on_ugc_touched", "door")
+	await get_tree().process_frame
+	_check(Game.lifetime_coins == coins_before + 7, "on_touch gives coins to the player",
+		[coins_before, Game.lifetime_coins])
 	Level.delete_slot(slot)
 	_finish()
 
