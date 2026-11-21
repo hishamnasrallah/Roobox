@@ -104,6 +104,14 @@ func pull_progress() -> void:
 		var local: float = Game.best_times.get(course, 0.0)
 		if t > 0.0 and (local <= 0.0 or t < local):
 			Game.best_times[course] = t
+	Game.spent_coins = maxi(Game.spent_coins, int(cloud.get("spent", 0)))
+	for id in cloud.get("owned", []):
+		if not Game.owns(str(id)) and AvatarItems.exists(str(id)):
+			Game.owned_items.append(str(id))
+	if Game.equipped.is_empty() and cloud.get("equipped") is Dictionary:
+		Game.equipped = cloud["equipped"]
+	if str(cloud.get("last_daily", "")) > Game.last_daily:
+		Game.last_daily = str(cloud["last_daily"])
 	var scores: Dictionary = cloud.get("best_scores", {})
 	for board: String in scores:
 		Game.best_scores[board] = maxi(int(Game.best_scores.get(board, 0)), int(scores[board]))
@@ -119,6 +127,10 @@ func push_progress() -> void:
 		"coins": Game.lifetime_coins,
 		"best_times": Game.best_times,
 		"best_scores": Game.best_scores,
+		"spent": Game.spent_coins,
+		"owned": Game.owned_items,
+		"equipped": Game.equipped,
+		"last_daily": Game.last_daily,
 	})
 	await client.write_object("profile", "avatar", {
 		"shirt": Game.shirt_index, "pants": Game.pants_index, "skin": Game.skin_index,

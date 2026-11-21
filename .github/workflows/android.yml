@@ -71,6 +71,12 @@ jobs:
           done
           exit $fail
 
+      - name: Shop test (coins, buy, wear, daily reward)
+        run: |
+          godot --headless --path game -- --shoptest 2>&1 | grep -vE "fontconfig|os_linuxbsd" | tee shop.log
+          if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" shop.log; then exit 1; fi
+          grep -q "SHOPTEST PASS" shop.log
+
       - name: Studio test (build, edit, save, test-play)
         run: |
           godot --headless --path game --fixed-fps 60 --quit-after 2400 -- --studiotest 2>&1 | grep -vE "fontconfig|os_linuxbsd" | tee studio.log

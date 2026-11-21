@@ -302,7 +302,21 @@ func _sanitize(info: Dictionary) -> Dictionary:
 		"shirt": _color(info.get("shirt"), Game.SHIRT_COLORS[0]),
 		"pants": _color(info.get("pants"), Game.PANTS_COLORS[0]),
 		"skin": _color(info.get("skin"), Game.SKIN_COLORS[0]),
+		"items": _items(info.get("items")),
 	}
+
+
+func _items(v: Variant) -> Array:
+	var out: Array = []
+	var slots: Dictionary = {}
+	if v is Array:
+		for id in v:
+			var it := AvatarItems.get_item(str(id))
+			if it.is_empty() or slots.has(it["slot"]):
+				continue
+			slots[it["slot"]] = true
+			out.append(str(id))
+	return out
 
 
 func _color(v: Variant, fallback: Color) -> Color:

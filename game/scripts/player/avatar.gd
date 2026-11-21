@@ -11,6 +11,9 @@ extends Node3D
 
 const HIP_HEIGHT := 0.85
 
+## Equipped shop item ids (see AvatarItems).
+var items: Array = []
+
 var _body: Node3D        # lean + squash root (at feet)
 var _hips: Node3D        # bobbing
 var _torso: Node3D
@@ -43,6 +46,8 @@ func apply_profile(info: Dictionary) -> void:
 		pants_color = info["pants"]
 	if info.get("skin") is Color:
 		skin_color = info["skin"]
+	if info.get("items") is Array:
+		items = (info["items"] as Array).duplicate()
 
 
 func _build() -> void:
@@ -88,6 +93,9 @@ func _build() -> void:
 	_box(_head, Vector3(0, 0.2, -0.285), Vector3(0.2, 0.05, 0.02), dark)
 	# Hair cap.
 	_box(_head, Vector3(0, 0.6, 0.03), Vector3(0.62, 0.1, 0.6), _mat(Color(0.25, 0.16, 0.1)))
+
+	for id in items:
+		AvatarItems.build(str(id), _head, _torso)
 
 
 func _limb(parent: Node3D, pivot: Vector3, size: Vector3, mat: Material) -> Node3D:

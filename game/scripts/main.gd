@@ -33,6 +33,9 @@ func _ready() -> void:
 	if OS.has_feature("dedicated_server") or args.has("--server"):
 		_run_server(args)
 		return
+	if args.has("--shoptest"):
+		add_child(load("res://scripts/debug/shop_test.gd").new())
+		return
 	if args.has("--backendtest"):
 		var bt: Node = load("res://scripts/debug/backend_test.gd").new()
 		bt.set("url", _arg(args, "--backend", "http://127.0.0.1:7350"))

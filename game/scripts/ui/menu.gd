@@ -118,7 +118,7 @@ func open_tab(t: String) -> void:
 
 func _refresh_account() -> void:
 	if _account_label != null:
-		_account_label.text = "%s\nCoins: %d" % [Backend.status_text(), Game.lifetime_coins]
+		_account_label.text = "%s\nCoins: %d" % [Backend.status_text(), Game.wallet()]
 
 
 func set_busy(busy: bool) -> void:
@@ -408,7 +408,17 @@ func _join(exp_id: String, address: String) -> void:
 # -------------------------------------------------------------- avatar ---
 
 func _build_avatar() -> void:
-	_text(_content, "Your name", 24)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 12)
+	_content.add_child(top)
+	var wallet := _text(top, "Coins: %d" % Game.wallet(), 30, Color(1.0, 0.85, 0.3))
+	wallet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if Game.daily_available():
+		var daily := UiStyle.button("DAILY REWARD +%d" % Game.DAILY_REWARD, Color(0.95, 0.6, 0.15), 18, 52)
+		daily.pressed.connect(_claim_daily)
+		top.add_child(daily)
+
+	_text(_content, "Your name", 22)
 	var name_edit := UiStyle.line_edit("Your name")
 	name_edit.max_length = Network.MAX_NAME
 	name_edit.text = Game.player_name
@@ -417,7 +427,62 @@ func _build_avatar() -> void:
 	_add_swatches(_content, "Shirt", "shirt", Game.SHIRT_COLORS)
 	_add_swatches(_content, "Pants", "pants", Game.PANTS_COLORS)
 	_add_swatches(_content, "Skin", "skin", Game.SKIN_COLORS)
-	_text(_content, "More outfits and accessories are coming soon!", 18, Color(1, 1, 1, 0.6))
+
+	_text(_content, "Avatar shop", 30, Color(1.0, 0.85, 0.3))
+	_text(_content, "Collect coins in any game to buy items. Tap an item you own to wear or remove it.", 18, Color(1, 1, 1, 0.7))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	_content.add_child(grid)
+	for it: Dictionary in AvatarItems.ITEMS:
+		grid.add_child(_shop_item(it))
+
+
+func _shop_item(it: Dictionary) -> Control:
+	var id: String = it["id"]
+	var owned := Game.owns(id)
+	var worn: bool = Game.equipped.get(it["slot"], "") == id
+	var col: Color = it["color"]
+	var label := "%s\n%s" % [it["name"], "WEARING" if worn else ("OWNED - tap to wear" if owned else "%d coins" % it["price"])]
+	var base := Color(0.2, 0.55, 0.3) if worn else (Color(0.25, 0.3, 0.48) if owned else Color(0.18, 0.2, 0.3))
+	var b := UiStyle.button(label, base, 17, 86)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := UiStyle.box(base, 16, 8)
+	sb.border_color = col
+	sb.set_border_width_all(4)
+	b.add_theme_stylebox_override("normal", sb)
+	b.pressed.connect(func() -> void: _shop_press(id))
+	return b
+
+
+func _shop_press(id: String) -> void:
+	if Game.owns(id):
+		Game.toggle_equip(id)
+	else:
+		var err := Game.buy(id)
+		if err != "":
+			show_status(err, true)
+			Sfx.play("hit")
+			return
+		Sfx.play("win")
+		show_status("You bought %s!" % AvatarItems.get_item(id)["name"])
+	if Backend.online:
+		Backend.push_progress()
+	profile_changed.emit()
+	_refresh_account()
+	open_tab("AVATAR")
+
+
+func _claim_daily() -> void:
+	var got := Game.claim_daily()
+	if got > 0:
+		Sfx.play("coin")
+		show_status("Daily reward: +%d coins!" % got)
+		if Backend.online:
+			Backend.push_progress()
+	_refresh_account()
+	open_tab("AVATAR")
 
 
 func _on_name_changed(t: String) -> void:

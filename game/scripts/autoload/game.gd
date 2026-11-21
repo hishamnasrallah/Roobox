@@ -45,6 +45,14 @@ var skin_index: int = 0
 var server_address: String = "127.0.0.1"
 ## Coins collected across all sessions (saved locally + in the cloud).
 var lifetime_coins: int = 0
+## Coins spent in the avatar shop. Wallet = lifetime_coins - spent_coins.
+var spent_coins: int = 0
+var owned_items: Array = []
+## slot -> item id
+var equipped: Dictionary = {}
+var last_daily: String = ""
+
+const DAILY_REWARD := 100
 ## Account server (Nakama), e.g. "http://203.0.113.5:7350". Empty = guest.
 var backend_url: String = ""
 var backend_key: String = "defaultkey"
@@ -96,6 +104,10 @@ func load_profile() -> void:
 		best_times = cfg.get_value("stats", "best_times", {}) as Dictionary
 		lifetime_coins = int(cfg.get_value("stats", "coins", 0))
 		best_scores = cfg.get_value("stats", "best_scores", {}) as Dictionary
+		spent_coins = int(cfg.get_value("shop", "spent", 0))
+		owned_items = cfg.get_value("shop", "owned", []) as Array
+		equipped = cfg.get_value("shop", "equipped", {}) as Dictionary
+		last_daily = str(cfg.get_value("shop", "last_daily", ""))
 		backend_url = str(cfg.get_value("online", "backend_url", ""))
 		backend_key = str(cfg.get_value("online", "backend_key", "defaultkey"))
 		device_id = str(cfg.get_value("online", "device_id", ""))
@@ -119,6 +131,10 @@ func save_profile() -> void:
 	cfg.set_value("stats", "best_times", best_times)
 	cfg.set_value("stats", "coins", lifetime_coins)
 	cfg.set_value("stats", "best_scores", best_scores)
+	cfg.set_value("shop", "spent", spent_coins)
+	cfg.set_value("shop", "owned", owned_items)
+	cfg.set_value("shop", "equipped", equipped)
+	cfg.set_value("shop", "last_daily", last_daily)
 	cfg.set_value("online", "backend_url", backend_url)
 	cfg.set_value("online", "backend_key", backend_key)
 	cfg.set_value("online", "device_id", device_id)
@@ -137,7 +153,70 @@ func profile() -> Dictionary:
 		"shirt": SHIRT_COLORS[shirt_index],
 		"pants": PANTS_COLORS[pants_index],
 		"skin": SKIN_COLORS[skin_index],
+		"items": equipped_ids(),
 	}
+
+
+# ----------------------------------------------------------------- shop ---
+
+func wallet() -> int:
+	return maxi(lifetime_coins - spent_coins, 0)
+
+
+func owns(id: String) -> bool:
+	return id in owned_items
+
+
+func equipped_ids() -> Array:
+	var out: Array = []
+	for slot in AvatarItems.SLOTS:
+		var id := str(equipped.get(slot, ""))
+		if id != "" and owns(id):
+			out.append(id)
+	return out
+
+
+## Buys an item with coins. Returns "" on success or an error message.
+func buy(id: String) -> String:
+	var it := AvatarItems.get_item(id)
+	if it.is_empty():
+		return "Unknown item"
+	if owns(id):
+		return "You already own it"
+	var price: int = it["price"]
+	if wallet() < price:
+		return "Not enough coins (%d more needed)" % (price - wallet())
+	spent_coins += price
+	owned_items.append(id)
+	equipped[it["slot"]] = id
+	save_profile()
+	return ""
+
+
+## Equips an owned item, or takes it off if it is already worn.
+func toggle_equip(id: String) -> void:
+	var it := AvatarItems.get_item(id)
+	if it.is_empty() or not owns(id):
+		return
+	var slot: String = it["slot"]
+	if equipped.get(slot, "") == id:
+		equipped.erase(slot)
+	else:
+		equipped[slot] = id
+	save_profile()
+
+
+func daily_available() -> bool:
+	return last_daily != Time.get_date_string_from_system()
+
+
+func claim_daily() -> int:
+	if not daily_available():
+		return 0
+	last_daily = Time.get_date_string_from_system()
+	lifetime_coins += DAILY_REWARD
+	save_profile()
+	return DAILY_REWARD
 
 
 # ---------------------------------------------------------------- state ---
