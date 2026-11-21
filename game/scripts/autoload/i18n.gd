@@ -43,7 +43,7 @@ const AR: Dictionary = {
 	"CHAT": "دردشة", "HOME": "البداية", "MENU": "القائمة", "GO!": "انطلق!", "CHECKPOINT!": "نقطة حفظ!",
 	"YOU WIN!": "فزت!", "COURSE CLEAR!": "خلّصت المسار!", "BACK TO SPAWN": "ارجع للبداية",
 	"KEEP EXPLORING": "كمّل استكشاف", "PLAYERS": "اللاعبين", "MUTE": "كتم", "UNMUTE": "إلغاء الكتم",
-	"REPORT": "تبليغ", "Report sent - thank you": "انبعت التبليغ - شكراً", "Player muted": "انكتم اللاعب",
+	"REPORT": "تبليغ", "Graphics lowered for smoother play": "خففنا الرسوم ليصير اللعب أنعم", "Report sent - thank you": "انبعت التبليغ - شكراً", "Player muted": "انكتم اللاعب",
 	"Chat is off (SETTINGS)": "الدردشة مقفلة (الإعدادات)", "Chat with other players": "الدردشة مع اللاعبين",
 	"You are playing alone. HOST or JOIN to play with friends.": "عم تلعب لحالك. استضف أو انضم لتلعب مع أصحابك.", "DISCONNECTED": "انقطع الاتصال", "Say something...": "اكتب شي...",
 	# Studio

@@ -27,6 +27,7 @@ var _remotes: Dictionary = {}   # peer id -> RemotePlayer
 var _in_game: bool = false
 var _headless: bool = false
 var _smoke_time: float = 0.0
+var _fps_low_t: float = 0.0
 var _smoke_done: bool = false
 
 
@@ -493,9 +494,29 @@ func _on_disconnected() -> void:
 		hud.set_info("")
 
 
+# --------------------------------------------------------- back button ---
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_on_back_pressed()
+
+
+## Android back button: game -> menu, studio -> save and leave, menu -> quit.
+func _on_back_pressed() -> void:
+	if studio != null:
+		studio.save()
+		Game.restart()
+	elif _in_game:
+		_back_to_menu()
+	else:
+		Game.save_profile()
+		get_tree().quit()
+
+
 # ------------------------------------------------------------ process ---
 
 func _process(delta: float) -> void:
+	_auto_quality(delta)
 	if _menu_cam != null and _preview != null:
 		_menu_t += delta
 		var target := _preview.global_position + Vector3(0, 1.3, 0)
@@ -573,6 +594,24 @@ func _build_environment() -> void:
 	if not Game.settings_changed.is_connected(_apply_graphics):
 		Game.settings_changed.connect(_apply_graphics)
 	_apply_graphics()
+
+
+## Lowers graphics automatically when the game runs slowly for a while.
+func _auto_quality(delta: float) -> void:
+	if not _in_game or _headless or Game.graphics == "low":
+		_fps_low_t = 0.0
+		return
+	if Engine.get_frames_per_second() < 26:
+		_fps_low_t += delta
+	else:
+		_fps_low_t = maxf(_fps_low_t - delta * 2.0, 0.0)
+	if _fps_low_t > 8.0:
+		_fps_low_t = 0.0
+		Game.graphics = "medium" if Game.graphics == "high" else "low"
+		Game.save_profile()
+		Game.apply_settings()
+		if hud != null:
+			hud.show_toast("Graphics lowered for smoother play", Color(0.7, 0.9, 1.0))
 
 
 ## Graphics quality: shadows, anti-aliasing, render scale, glow.

@@ -174,6 +174,63 @@ jobs:
         if: always()
         run: cd backend && docker compose logs nakama | tail -80
 
+  release:
+    name: Release AAB (Google Play)
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.7.2
+    env:
+      HAS_KEY: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates/ ~/.config/
+          mv /root/.config/godot ~/.config/godot
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable \
+             ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Release keystore (secret, or a throwaway CI key)
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_USER: ${{ secrets.RELEASE_KEYSTORE_USER }}
+          KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$KEYSTORE_USER" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "Using the real release keystore"
+          else
+            keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9999 -alias roobox_ci \
+              -keystore "$RUNNER_TEMP/release.keystore" -storepass ci-pass-123 -keypass ci-pass-123 \
+              -dname "CN=Roobox CI, O=Roobox, C=US"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=roobox_ci" >> "$GITHUB_ENV"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=ci-pass-123" >> "$GITHUB_ENV"
+            echo "::notice::No RELEASE_KEYSTORE_BASE64 secret - built with a throwaway key (NOT for Google Play)"
+          fi
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Build AAB with Gradle
+        run: |
+          godot --headless --path game --import > /dev/null 2>&1 || true
+          godot --headless --path game --install-android-build-template
+          mkdir -p build/release
+          godot --headless --path game --export-release "Android Release" "$GITHUB_WORKSPACE/build/release/roobox.aab"
+          ls -la build/release
+          test -s build/release/roobox.aab
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: roobox-release-aab
+          path: build/release/roobox.aab
+          if-no-files-found: error
+
   publish:
     name: Publish dev-latest release (direct APK link)
     needs: [build, backend]
