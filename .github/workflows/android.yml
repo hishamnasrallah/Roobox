@@ -178,6 +178,7 @@ jobs:
     name: Release AAB (Google Play)
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     container:
       image: barichello/godot-ci:4.7.2
     env:
@@ -216,11 +217,16 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
       - name: Build AAB with Gradle
+        shell: bash
         run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
           godot --headless --path game --import > /dev/null 2>&1 || true
-          godot --headless --path game --install-android-build-template
+          godot --headless --path game --install-android-build-template 2>&1 | tail -5
+          ls game/android/build | head -20 || true
           mkdir -p build/release
-          godot --headless --path game --export-release "Android Release" "$GITHUB_WORKSPACE/build/release/roobox.aab"
+          export GRADLE_OPTS="-Dorg.gradle.daemon=false"
+          timeout 1500 godot --headless --verbose --path game --export-release "Android Release" "$GITHUB_WORKSPACE/build/release/roobox.aab" 2>&1 \
+            | grep -vE "fontconfig|os_linuxbsd" | tail -150
           ls -la build/release
           test -s build/release/roobox.aab
 
