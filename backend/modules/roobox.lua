@@ -47,4 +47,89 @@ local function server_list(context, payload)
 end
 nk.register_rpc(server_list, "server_list")
 
+-- ------------------------------------------------------------ safety ---
+-- Reports are stored by the server (owner = system user, not readable by
+-- players). Moderators are the usernames in the ADMIN_USERS env variable.
+local SYSTEM_ID = "00000000-0000-0000-0000-000000000000"
+
+local function is_admin(context)
+  if context.user_id == nil then return false end
+  local raw = (context.env and context.env["ADMIN_USERS"]) or ""
+  if raw == "" then return false end
+  local users = nk.users_get_id({ context.user_id })
+  if #users == 0 then return false end
+  local me = users[1].username
+  for entry in string.gmatch(raw, "([^,]+)") do
+    if entry:gsub("^%s+", ""):gsub("%s+$", "") == me then return true end
+  end
+  return false
+end
+
+local function report(context, payload)
+  local data = nk.json_decode(payload ~= "" and payload or "{}")
+  local key = ("r%d_%s"):format(math.floor(nk.time() / 1000), string.sub(context.user_id or "anon", 1, 8))
+  local ctx = {}
+  if type(data.context) == "table" then
+    for i = math.max(1, #data.context - 19), #data.context do
+      table.insert(ctx, tostring(data.context[i]):sub(1, 200))
+    end
+  end
+  nk.storage_write({{
+    collection = "reports", key = key, user_id = SYSTEM_ID,
+    value = {
+      target = tostring(data.target or ""):sub(1, 80),
+      reason = tostring(data.reason or ""):sub(1, 200),
+      reporter = tostring(data.reporter or ""):sub(1, 40),
+      reporter_id = context.user_id,
+      experience = tostring(data.experience or ""):sub(1, 40),
+      context = ctx,
+      time = math.floor(nk.time() / 1000),
+    },
+    permission_read = 0, permission_write = 0,
+  }})
+  return nk.json_encode({ ok = true })
+end
+nk.register_rpc(report, "report")
+
+local function mod_check(context, payload)
+  return nk.json_encode({ admin = is_admin(context) })
+end
+nk.register_rpc(mod_check, "mod_check")
+
+local function mod_reports(context, payload)
+  if not is_admin(context) then error("not allowed") end
+  local objects = nk.storage_list(SYSTEM_ID, "reports", 100, "")
+  local out = {}
+  for _, o in ipairs(objects or {}) do
+    local v = o.value
+    v.key = o.key
+    table.insert(out, v)
+  end
+  return nk.json_encode({ reports = out })
+end
+nk.register_rpc(mod_reports, "mod_reports")
+
+local function mod_dismiss(context, payload)
+  if not is_admin(context) then error("not allowed") end
+  local data = nk.json_decode(payload ~= "" and payload or "{}")
+  nk.storage_delete({{ collection = "reports", key = tostring(data.key or ""), user_id = SYSTEM_ID }})
+  return nk.json_encode({ ok = true })
+end
+nk.register_rpc(mod_dismiss, "mod_dismiss")
+
+-- Removes a published community game (index entry + level).
+local function mod_remove_game(context, payload)
+  if not is_admin(context) then error("not allowed") end
+  local data = nk.json_decode(payload ~= "" and payload or "{}")
+  local owner = tostring(data.owner or "")
+  local key = tostring(data.key or "")
+  nk.storage_delete({
+    { collection = "games_index", key = key, user_id = owner },
+    { collection = "games", key = key, user_id = owner },
+  })
+  nk.logger_info(("moderator %s removed game %s/%s"):format(context.user_id, owner, key))
+  return nk.json_encode({ ok = true })
+end
+nk.register_rpc(mod_remove_game, "mod_remove_game")
+
 nk.logger_info("Roobox module loaded")

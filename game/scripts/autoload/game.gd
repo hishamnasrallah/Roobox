@@ -11,6 +11,12 @@ signal course_completed(course_name: String, time_sec: float)
 signal settings_changed
 ## Ask the local player to play an emote ("" stops it).
 signal emote_requested(id: String)
+## Backpack (hotbar) changed or a different tool is held.
+signal backpack_changed
+## The local player's health changed.
+signal health_changed(health: float, max_health: float)
+## The USE button was pressed (swing the sword...).
+signal tool_used
 ## Short message for the HUD (e.g. "SPEED COIL!").
 signal notice(text: String)
 ## A badge was earned (shown as a toast by the HUD).
@@ -93,6 +99,10 @@ const BADGES: Array[Dictionary] = [
 ## Parental controls. When a PIN is set, only someone with the PIN can
 ## change them. Keys: no_chat, no_online, no_publish, no_friends.
 var parental: Dictionary = {"pin": "", "no_chat": false, "no_online": false, "no_publish": false, "no_friends": false}
+
+## Tools you picked up in this game (ids from Tools.LIST) and the held one.
+var backpack: Array = []
+var held_tool: int = -1
 
 ## "" = not asked yet, "under13", "13plus" (asked on first launch).
 var age_group: String = ""
@@ -317,6 +327,8 @@ func claim_daily() -> int:
 # ---------------------------------------------------------------- state ---
 
 func reset_run() -> void:
+	backpack = []
+	held_tool = -1
 	coins = 0
 	total_coins = 0
 	checkpoint_position = spawn_point
@@ -382,6 +394,32 @@ func complete_course(course_name: String) -> void:
 	course_completed.emit(course_name, t)
 	Sfx.play("win")
 	award_badge("first_win")
+
+
+# --------------------------------------------------------------- tools ---
+
+## Puts a tool in the backpack (max 6, no duplicates) and holds it if your
+## hands are empty. Returns true if it was added.
+func give_tool(id: String) -> bool:
+	if not Tools.exists(id) or backpack.has(id) or backpack.size() >= 6:
+		return false
+	backpack.append(id)
+	if held_tool < 0:
+		held_tool = backpack.size() - 1
+	backpack_changed.emit()
+	notice.emit(Tools.label(id) + "!")
+	Sfx.play("checkpoint")
+	return true
+
+
+## Holds backpack slot i (or puts the tool away if it is already held).
+func equip_tool(i: int) -> void:
+	held_tool = -1 if i == held_tool or i < 0 or i >= backpack.size() else i
+	backpack_changed.emit()
+
+
+func held_tool_id() -> String:
+	return str(backpack[held_tool]) if held_tool >= 0 and held_tool < backpack.size() else ""
 
 
 # ---------------------------------------------------- parental controls ---

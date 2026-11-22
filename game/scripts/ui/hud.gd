@@ -189,6 +189,7 @@ func _ready() -> void:
 	_build_players_panel(root)
 	_build_emote_panel(root)
 	_build_leaderboard(root)
+	_build_tools(root)
 	if not Game.tutorial_done and DisplayServer.get_name() != "headless":
 		_build_tutorial(root)
 
@@ -218,6 +219,10 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	var tk := event as InputEventKey
+	if tk != null and tk.pressed and not tk.echo and not Game.input_blocked and _tool_key(tk):
+		get_viewport().set_input_as_handled()
+		return
 	var k := event as InputEventKey
 	if k != null and k.pressed and not k.echo:
 		if k.keycode == KEY_ENTER and not _chat_edit.visible:
@@ -680,3 +685,89 @@ func _player_name(pid: int) -> String:
 		return Game.player_name
 	var info: Dictionary = Network.players.get(pid, {})
 	return str(info.get("name", "Player %d" % pid))
+
+
+# ----------------------------------------------------- backpack / health ---
+
+var _hotbar: HBoxContainer
+var _use_btn: Button
+var _health_bg: ColorRect
+var _health_fg: ColorRect
+
+
+func _build_tools(root: Control) -> void:
+	_hotbar = HBoxContainer.new()
+	_hotbar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_hotbar.offset_left = -330
+	_hotbar.offset_right = 330
+	_hotbar.offset_top = -92
+	_hotbar.offset_bottom = -20
+	_hotbar.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hotbar.add_theme_constant_override("separation", 8)
+	root.add_child(_hotbar)
+	touch.blockers.append(_hotbar)
+	_use_btn = UiStyle.button("USE", Color(0.85, 0.35, 0.3), 26, 96)
+	_use_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_use_btn.offset_left = -330
+	_use_btn.offset_right = -230
+	_use_btn.offset_top = -200
+	_use_btn.offset_bottom = -104
+	_use_btn.visible = false
+	_use_btn.pressed.connect(_on_use)
+	root.add_child(_use_btn)
+	touch.blockers.append(_use_btn)
+	_health_bg = ColorRect.new()
+	_health_bg.color = Color(0, 0, 0, 0.45)
+	_health_bg.position = Vector2(30, 66)
+	_health_bg.size = Vector2(220, 14)
+	_health_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_health_bg)
+	_health_fg = ColorRect.new()
+	_health_fg.color = Color(0.3, 0.9, 0.4)
+	_health_fg.size = Vector2(220, 14)
+	_health_fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_health_bg.add_child(_health_fg)
+	_health_bg.visible = false
+	Game.backpack_changed.connect(_refresh_hotbar)
+	Game.health_changed.connect(_on_health)
+	_refresh_hotbar()
+
+
+func _refresh_hotbar() -> void:
+	for ch in _hotbar.get_children():
+		ch.queue_free()
+	for i in Game.backpack.size():
+		var id := str(Game.backpack[i])
+		var held := i == Game.held_tool
+		var b := UiStyle.button("%d  %s" % [i + 1, tr(Tools.label(id))], Tools.color(id).darkened(0.45), 15, 64)
+		b.custom_minimum_size.x = 120
+		var sb := UiStyle.box(Tools.color(id).darkened(0.2 if held else 0.55), 14, 6)
+		sb.border_color = Color(1.0, 0.85, 0.25) if held else Color(0, 0, 0, 0.4)
+		sb.set_border_width_all(4 if held else 2)
+		b.add_theme_stylebox_override("normal", sb)
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(Game.equip_tool.bind(i))
+		_hotbar.add_child(b)
+	_use_btn.visible = Tools.usable(Game.held_tool_id())
+
+
+func _on_use() -> void:
+	Game.tool_used.emit()
+
+
+func _on_health(h: float, mx: float) -> void:
+	_health_bg.visible = h < mx
+	var k := clampf(h / maxf(mx, 1.0), 0.0, 1.0)
+	_health_fg.size.x = 220.0 * k
+	_health_fg.color = Color(0.9, 0.25, 0.2).lerp(Color(0.3, 0.9, 0.4), k)
+
+
+## Desktop: 1-6 hold a tool, E / left Ctrl uses it.
+func _tool_key(key: InputEventKey) -> bool:
+	if key.keycode >= KEY_1 and key.keycode <= KEY_6:
+		Game.equip_tool(key.keycode - KEY_1)
+		return true
+	if key.keycode == KEY_E:
+		Game.tool_used.emit()
+		return true
+	return false

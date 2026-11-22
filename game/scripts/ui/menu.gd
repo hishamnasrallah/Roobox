@@ -580,6 +580,16 @@ func _load_community(box: VBoxContainer) -> void:
 		row.add_child(host)
 		_busy_buttons.append(solo)
 		_busy_buttons.append(host)
+		var rep := UiStyle.button("REPORT", Color(0.6, 0.3, 0.3), 16, 50)
+		rep.custom_minimum_size.x = 100
+		rep.pressed.connect(_report_game.bind(item, rep))
+		row.add_child(rep)
+
+
+func _report_game(item: Dictionary, b: Button) -> void:
+	b.disabled = true
+	var ok: bool = await Backend.report_game(str(item["owner"]), str(item["key"]), str(item["name"]))
+	show_status(tr("Thanks - moderators will check this game.") if ok else tr("Could not send the report."), not ok)
 
 
 func _play_community(item: Dictionary, mode: String) -> void:
@@ -959,6 +969,63 @@ func _refresh_swatches(key: String) -> void:
 var _parental_unlocked: bool = false
 
 
+## Moderators (ADMIN_USERS on the server): review reports, remove games.
+func _build_moderation(c: Control) -> void:
+	_text(c, "Moderation", 24, Color(1.0, 0.5, 0.4))
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	c.add_child(box)
+	_text(box, "Loading reports...", 18, Color(1, 1, 1, 0.6))
+	_load_reports(box)
+
+
+func _load_reports(box: VBoxContainer) -> void:
+	var reps: Array = await Backend.mod_reports()
+	if not is_instance_valid(box):
+		return
+	for ch in box.get_children():
+		ch.queue_free()
+	if reps.is_empty():
+		_text(box, "No open reports.", 18, Color(1, 1, 1, 0.6))
+		return
+	for r: Dictionary in reps:
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", UiStyle.box(Color(0.25, 0.1, 0.1, 0.8), 14, 10))
+		box.add_child(card)
+		var vb := VBoxContainer.new()
+		card.add_child(vb)
+		var when := Time.get_datetime_string_from_unix_time(int(r.get("time", 0))).replace("T", " ")
+		_text(vb, "%s  -  %s" % [r.get("target", "?"), r.get("reason", "")], 19)
+		_text(vb, tr("by %s, %s, in %s") % [r.get("reporter", "?"), when, r.get("experience", "?")], 14, Color(1, 1, 1, 0.6))
+		var ctx: Array = r.get("context", []) if r.get("context") is Array else []
+		if not ctx.is_empty():
+			_text(vb, "\n".join(ctx.slice(-6)), 14, Color(1, 0.9, 0.8, 0.8))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		vb.add_child(row)
+		var target := str(r.get("target", ""))
+		if target.begins_with("game:"):
+			var ref := target.substr(5)
+			var rg := UiStyle.button("REMOVE GAME", Color(0.7, 0.25, 0.25), 16, 44)
+			rg.pressed.connect(_mod_remove.bind(ref.get_slice("/", 0), ref.get_slice("/", 1), str(r.get("key", "")), box))
+			row.add_child(rg)
+		var db := UiStyle.button("DISMISS", Color(0.35, 0.38, 0.52), 16, 44)
+		db.pressed.connect(_mod_dismiss.bind(str(r.get("key", "")), box))
+		row.add_child(db)
+
+
+func _mod_dismiss(key: String, box: VBoxContainer) -> void:
+	await Backend.mod_dismiss(key)
+	_load_reports(box)
+
+
+func _mod_remove(owner: String, key: String, report_key: String, box: VBoxContainer) -> void:
+	var ok: bool = await Backend.mod_remove_game(owner, key)
+	show_status(tr("Game removed.") if ok else tr("Could not remove the game."), not ok)
+	await Backend.mod_dismiss(report_key)
+	_load_reports(box)
+
+
 ## Parental controls: limits locked behind a 4-digit PIN.
 func _build_parental(c: Control) -> void:
 	_text(c, "Parental controls", 24, Color(1.0, 0.85, 0.3))
@@ -1096,6 +1163,8 @@ func _build_settings() -> void:
 	c.add_child(chat)
 
 	_build_parental(c)
+	if Backend.online and Backend.is_admin:
+		_build_moderation(c)
 
 	_text(c, "Account", 24, Color(1.0, 0.85, 0.3))
 	_text(c, "Account server (Nakama) - enables accounts, friends, cloud save, world records and online play. Leave empty to play as a guest.", 20, Color(1, 1, 1, 0.8))

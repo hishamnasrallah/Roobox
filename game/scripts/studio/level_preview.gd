@@ -115,8 +115,8 @@ static func _add(parent: Node3D, b: WorldBuilder, p: Dictionary) -> void:
 		"kart":
 			b.part("box", at + Vector3(0, -sz.y * 0.5 + 0.55, 0), Vector3(2.2, 0.5, 3.6), col, false, "plain", rot)
 			b.part("box", at + Vector3(0, -sz.y * 0.5 + 0.95, 0) + Basis.from_euler(rot) * Vector3(0, 0, 0.5), Vector3(1.3, 0.35, 1.2), Color(0.15, 0.15, 0.2), false, "plain", rot)
-		"speedcoil", "gravitycoil":
-			var gc := Color(1.0, 0.3, 0.3) if t == "speedcoil" else Color(0.35, 0.6, 1.0)
+		"speedcoil", "gravitycoil", "sword", "flashlight", "balloon":
+			var gc := Tools.color(t)
 			b.part("cyl", at, Vector3(0.8, 1.2, 0.8), gc, false, "neon|" + gc.to_html(), rot)
 		"fire", "smoke", "sparkles":
 			var c2 := Color(1.0, 0.5, 0.15) if t == "fire" else (Color(0.6, 0.6, 0.62) if t == "smoke" else col)

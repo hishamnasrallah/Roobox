@@ -7,6 +7,8 @@ extends CharacterBody3D
 
 signal jumped
 signal landed(impact_speed: float)
+## Sword swing (main checks which other players were hit).
+signal swung(origin: Vector3, forward: Vector3)
 
 @export var max_speed: float = 8.5
 @export var ground_accel: float = 75.0
@@ -43,9 +45,14 @@ var vehicle: Kart = null
 var _seat_cool: float = 0.0
 var _car_speed: float = 0.0
 var _car_yaw: float = 0.0
-## Gear effects (reset when you respawn).
+## Gear effects (from the held tool, see Tools).
 var gear_speed: float = 1.0
 var gear_gravity: float = 1.0
+var max_health: float = 100.0
+var health: float = 100.0
+var _regen_wait: float = 0.0
+var _swing_cool: float = 0.0
+var _swing_flag: bool = false
 
 const NET_RATE := 1.0 / 20.0
 
@@ -68,12 +75,16 @@ func _ready() -> void:
 
 	Game.player_died.connect(_on_died)
 	Game.emote_requested.connect(play_emote)
+	Game.tool_used.connect(use_tool)
+	Game.backpack_changed.connect(_on_backpack)
 
 
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
 	_seat_cool = maxf(_seat_cool - delta, 0.0)
+	_swing_cool = maxf(_swing_cool - delta, 0.0)
+	_update_tool_effects(delta)
 	if seat_node != null:
 		if not is_instance_valid(seat_node):
 			leave_seat()
@@ -125,7 +136,8 @@ func _physics_process(delta: float) -> void:
 		var g := gravity * gear_gravity
 		if velocity.y < 0.0:
 			g *= fall_multiplier
-		velocity.y = maxf(velocity.y - g * delta, -48.0)
+		var max_fall := -4.0 if Game.held_tool_id() == "balloon" else -48.0
+		velocity.y = maxf(velocity.y - g * delta, max_fall)
 
 	# --- Jump (buffered + coyote) ---
 	if _coyote > 0.0 and Game.consume_jump():
@@ -180,6 +192,9 @@ func _send_net(delta: float) -> void:
 		var flags := (1 if is_on_floor() else 0) | (2 if _dead else 0) | (emote_index() << 2)
 		if vehicle != null:
 			flags |= (vehicle.index + 1) << 7
+		flags |= (Tools.LIST.find(Game.held_tool_id()) + 1) << 17
+		if _swing_flag:
+			flags |= 1 << 21
 		var net_yaw := avatar.rotation.y if avatar != null else _target_yaw
 		Network.send_state(global_position, net_yaw, get_real_velocity(), flags)
 
@@ -300,15 +315,56 @@ func _try_step_up(dir: Vector3) -> void:
 	velocity.y = 0.0
 
 
-## Picked up gear (see GearPickup).
+## Old name kept for scripts/tests: puts the gear in the backpack.
 func give_gear(kind: String) -> void:
-	match kind:
-		"speedcoil":
-			gear_speed = 1.6
-		"gravitycoil":
-			gear_gravity = 0.45
-	Sfx.play("checkpoint")
-	Game.notice.emit(str(GearPickup.INFO.get(kind, {"name": kind})["name"]) + "!")
+	Game.give_tool(kind)
+	var i := Game.backpack.find(kind)
+	if i >= 0 and Game.held_tool != i:
+		Game.equip_tool(i)
+	_update_tool_effects(0.0)
+
+
+# ---------------------------------------------------------------- tools ---
+
+func _on_backpack() -> void:
+	if avatar != null:
+		avatar.set_tool(Game.held_tool_id())
+
+
+func _update_tool_effects(delta: float) -> void:
+	var held := Game.held_tool_id()
+	gear_speed = 1.6 if held == "speedcoil" else 1.0
+	gear_gravity = 0.45 if held == "gravitycoil" else 1.0
+	if health < max_health and not _dead:
+		_regen_wait -= delta
+		if _regen_wait <= 0.0:
+			health = minf(health + 4.0 * delta, max_health)
+			Game.health_changed.emit(health, max_health)
+
+
+## USE button: swing the sword.
+func use_tool() -> void:
+	if _dead or Game.held_tool_id() != "sword" or _swing_cool > 0.0:
+		return
+	_swing_cool = 0.45
+	_swing_flag = not _swing_flag
+	if avatar != null:
+		avatar.swing()
+	Sfx.play("jump", -6.0, 1.6)
+	var fwd := Vector3(-sin(_target_yaw), 0, -cos(_target_yaw))
+	swung.emit(global_position + Vector3(0, 1, 0), fwd)
+
+
+## Takes damage (sword hits, script traps). 0 health = respawn.
+func damage(amount: float, _from: String = "") -> void:
+	if _dead or amount <= 0.0:
+		return
+	health = maxf(health - amount, 0.0)
+	_regen_wait = 5.0
+	Game.health_changed.emit(health, max_health)
+	Sfx.play("hit", -4.0)
+	if health <= 0.0:
+		Game.kill_player()
 
 
 ## Plays an emote (wave, dance...). Moving cancels it.
@@ -392,6 +448,8 @@ func _on_died() -> void:
 func _respawn() -> void:
 	gear_speed = 1.0
 	gear_gravity = 1.0
+	health = max_health
+	Game.health_changed.emit(health, max_health)
 	global_position = Game.checkpoint_position
 	velocity = Vector3.ZERO
 	_control_lock = 0.0

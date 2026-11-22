@@ -11,6 +11,7 @@ const MAX_EXTRAPOLATE := 0.25
 var peer_id: int = 0
 var avatar: Avatar
 var _label: Label3D
+var _swing_bit: int = 0
 var _snaps: Array = []   # [time, pos, yaw, vel, flags]
 var _was_dead: bool = false
 
@@ -108,6 +109,12 @@ func _process(delta: float) -> void:
 		for k in get_tree().get_nodes_in_group("karts"):
 			if (k as Kart).index == vi - 1 and not ((k as Kart).driver is Player):
 				(k as Kart).follow(avatar.global_position - Vector3(0, 0.6, 0), avatar.rotation.y)
+	var ti := (flags >> 17) & 15
+	avatar.set_tool(Tools.LIST[ti - 1] if ti > 0 and ti <= Tools.LIST.size() else "")
+	var sw := (flags >> 21) & 1
+	if sw != _swing_bit:
+		_swing_bit = sw
+		avatar.swing()
 	var ei := (flags >> 2) & 15
 	avatar.play_emote(Game.EMOTES[ei] if ei < Game.EMOTES.size() else "")
 	avatar.animate(delta, hs / 8.5, (flags & 1) != 0, vel.y)

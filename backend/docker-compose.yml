@@ -37,6 +37,7 @@ services:
       --database.address postgres:${POSTGRES_PASSWORD:-localdb}@postgres:5432/nakama
       --runtime.path /nakama/data/modules
       --runtime.env GAME_SERVERS=${GAME_SERVERS:-island=:7777,lava_rising=:7778,color_drop=:7779,obby_rush=:7780}
+      --runtime.env ADMIN_USERS=${ADMIN_USERS:-}
       --socket.server_key ${NAKAMA_SERVER_KEY:-defaultkey}
       --console.username ${NAKAMA_CONSOLE_USER:-admin}
       --console.password ${NAKAMA_CONSOLE_PASSWORD:-change-me-now}

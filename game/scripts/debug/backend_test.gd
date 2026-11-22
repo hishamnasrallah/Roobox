@@ -89,6 +89,31 @@ func _run() -> void:
 	_check(seen.size() == 1 and str((seen[0]["value"] as Dictionary).get("server", "")) == "10.0.0.5:7777",
 		"bob sees what alice is playing", seen)
 
+	# --- Reports + moderation (ADMIN_USERS=roomodci in CI) ---
+	var rep := await b.rpc("report", {"target": "Alice A", "reason": "ci report", "context": ["hi"], "reporter": "bob"})
+	_check(bool(rep.get("ok", false)), "report via RPC", rep)
+	var notmod := await b.rpc("mod_check")
+	_check(not bool(notmod.get("admin", true)), "normal player is not a moderator", notmod)
+	var denied := await b.rpc("mod_reports")
+	_check(not denied.has("reports"), "normal player can't read reports", denied)
+	var m := NakamaClient.new(self, url)
+	var rm := await m.authenticate_device(_uid(), "roomodci")
+	_check(rm["ok"] and m.username == "roomodci", "moderator signs in", rm)
+	var ismod := await m.rpc("mod_check")
+	_check(bool(ismod.get("admin", false)), "moderator is recognised", ismod)
+	var reps := await m.rpc("mod_reports")
+	var found_rep := ""
+	for r0 in reps.get("reports", []):
+		if str((r0 as Dictionary).get("reason", "")) == "ci report":
+			found_rep = str((r0 as Dictionary).get("key", ""))
+	_check(found_rep != "", "moderator sees the report", reps)
+	var dis := await m.rpc("mod_dismiss", {"key": found_rep})
+	_check(bool(dis.get("ok", false)), "moderator dismisses the report", dis)
+	await a.write_object("games_index", "badgame", {"name": "Bad", "author": "a", "parts": 1, "updated": 1}, true)
+	var rmg := await m.rpc("mod_remove_game", {"owner": a.user_id, "key": "badgame"})
+	var gone := await b.read_objects([{"collection": "games_index", "key": "badgame", "user_id": a.user_id}])
+	_check(bool(rmg.get("ok", false)) and gone.is_empty(), "moderator removes a community game", [rmg, gone])
+
 	# --- RPC ---
 	var sl := await a.rpc("server_list")
 	_check(sl.has("servers"), "server_list RPC", sl)

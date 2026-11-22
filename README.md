@@ -90,6 +90,7 @@ end)
 - **القطع:** `world.find(name)` ← `set_color` · `set_visible` · `set_solid` · `move_to` · `move_by` · `position` · `destroy`
 - **اللاعب:** `teleport` · `kill` · `give_coins` · `set_speed` · `set_jump` · `message` · `position` · `player.name`
 - **الواجهة والنقاط:** `ui.message` · `ui.status` · `score.add/set/get`
+- **الأدوات والصحة:** `player:give_tool("sword")` · `player:damage(n)`
 - **اللاعبين والحفظ:** `on_join(fn(player))` · `on_leave(fn(player))` · `player:set_data(key, v)` · `player:get_data(key)` (بتنحفظ بين الزيارات)
 - **لوحة النقاط والبادجات:** `player:set_stat(name, v)` · `player:add_stat(name, n)` · `player:get_stat(name)` (لحد 3 أعمدة بالزاوية) · `player:award_badge(name)`
 - **اللغة:** متغيرات، جداول، دوال وclosures، `if/while/repeat/for/for-in`، `pairs/ipairs`، مكتبات `math/string/table`.
@@ -99,13 +100,17 @@ end)
 
 - **EMOTE:** 7 حركات (WAVE، DANCE، CHEER، POINT، CLAP، SIT، LAUGH) بتبيّن لكل اللاعبين، أو اكتب `/e dance` بالشات. **RESET** بيرجعك لآخر checkpoint.
 - **فقاعات كلام** فوق راس اللي بيحكي، **لوحة نقاط** لما اللعبة بتستعملها، و**بادجات** (شوفها بتبويب AVATAR).
-- **أدوات:** Speed Coil (أسرع) و Gravity Coil (قفز أعلى) لحد ما تموت.
+- **حقيبة الأدوات:** المس أي أداة لتنحط بالشريط تحت (لحد 6): سيف (زر USE للضرب، 25 من 100 صحة)، كشاف، بالون (بتنزل ببطء)، Speed Coil، Gravity Coil. بالكمبيوتر: 1-6 للاختيار و E للاستعمال.
 - **فرق:** حط TEAM SPAWN بلونين أو أكتر بالـ Studio، واللاعبين بيتوزعوا على الفرق (والسكربت بيعرف `player.team`).
 - **مقاعد وكارتات:** امشي على الكرسي لتقعد، وعالكارت لتسوقه (الجويستك للسواقة، JUMP لتنزل).
 - **الأصدقاء:** بتشوف شو عم يلعبوا، وزر **JOIN** بيدخلك معهم.
 - **رقابة أبوية** بالإعدادات: إيقاف الشات / اللعب أونلاين / النشر / الأصدقاء، مقفولة بـ PIN.
 - تبويب PLAY: **كمّل اللعب** و**المفضّلة** (زر FAVORITE بصفحة كل لعبة).
 - قائمة الفروق الكاملة مع روبلوكس وخطة تطويرها: [docs/ROBLOX_GAP.md](docs/ROBLOX_GAP.md).
+
+## الإشراف (Moderation)
+
+حط أسماء المشرفين بـ `ADMIN_USERS` بملف `backend/.env` (مفصولة بفواصل). المشرف بيشوف بالإعدادات قسم **Moderation**: التبليغات مع آخر رسائل الشات، زر DISMISS، و REMOVE GAME للألعاب المبلّغ عنها.
 
 ## العالم
 

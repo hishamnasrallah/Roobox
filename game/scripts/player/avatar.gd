@@ -219,6 +219,59 @@ func animate(delta: float, speed_ratio: float, on_floor: bool, vertical_speed: f
 	if _emote_w > 0.01 and emote != "":
 		_apply_emote(_emote_w)
 
+	# --- Holding a tool / swinging ---
+	if _tool_id != "":
+		if _tool_id == "balloon":
+			_arm_r.rotation.z = lerpf(_arm_r.rotation.z, 2.5, 0.8)
+			_arm_r.rotation.x = 0.0
+		else:
+			_arm_r.rotation.x = 0.55
+			_arm_r.rotation.z = 0.05
+	if _swing > 0.0:
+		_swing = maxf(_swing - delta, 0.0)
+		var p := 1.0 - _swing / SWING_TIME
+		_arm_r.rotation.x = lerpf(2.8, 0.15, p)
+
+
+## Tool held in the right hand (see Tools) + sword swing.
+var _tool: Node3D
+var _tool_id: String = ""
+var _swing: float = 0.0
+const SWING_TIME := 0.35
+
+
+func set_tool(id: String) -> void:
+	if id == _tool_id:
+		return
+	_tool_id = id
+	if _tool != null:
+		_tool.queue_free()
+		_tool = null
+	if id == "" or _arm_r == null:
+		return
+	_tool = Tools.model(id)
+	_tool.position = Vector3(0, -0.78, -0.05)
+	if id != "balloon":
+		_tool.rotation.x = -PI * 0.5
+	if id == "flashlight":
+		var spot := SpotLight3D.new()
+		spot.light_color = Color(1.0, 0.95, 0.75)
+		spot.light_energy = 4.0
+		spot.spot_range = 22.0
+		spot.spot_angle = 28.0
+		spot.rotation.x = PI * 0.5
+		spot.position.y = 0.3
+		_tool.add_child(spot)
+	_arm_r.add_child(_tool)
+
+
+func held_tool() -> String:
+	return _tool_id
+
+
+func swing() -> void:
+	_swing = SWING_TIME
+
 
 ## Speech bubble above the head (chat), fades after a few seconds.
 var _bubble: Label3D

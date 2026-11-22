@@ -55,6 +55,9 @@ const PRESETS: Array[Dictionary] = [
 	{"id": "kart", "label": "KART", "t": "kart", "s": [3, 2, 4], "c": 4, "cat": "game"},
 	{"id": "speedcoil", "label": "SPEED COIL", "t": "speedcoil", "s": [1, 2, 1], "c": 4, "cat": "game"},
 	{"id": "gravitycoil", "label": "GRAVITY COIL", "t": "gravitycoil", "s": [1, 2, 1], "c": 8, "cat": "game"},
+	{"id": "sword", "label": "SWORD", "t": "sword", "s": [1, 2, 1], "c": 0, "cat": "game"},
+	{"id": "flashlight", "label": "FLASHLIGHT", "t": "flashlight", "s": [1, 2, 1], "c": 6, "cat": "game"},
+	{"id": "balloon", "label": "BALLOON", "t": "balloon", "s": [1, 2, 1], "c": 10, "cat": "game"},
 	{"id": "water", "label": "WATER", "t": "water", "s": [4, 4, 4], "c": 8, "cat": "nature"},
 	{"id": "tree", "label": "TREE", "t": "tree", "s": [3, 6, 3], "c": 7, "cat": "nature"},
 	{"id": "sign", "label": "SIGN", "t": "sign", "s": [4, 2, 1], "c": 3, "cat": "nature"},
@@ -66,7 +69,7 @@ const PRESETS: Array[Dictionary] = [
 
 const SPECIAL := ["spawn", "checkpoint", "kill", "jumppad", "coin", "finish", "spikes", "speed",
 	"conveyor", "teleport", "water", "ladder", "light", "sign", "tree", "truss", "fire", "smoke", "sparkles",
-	"speedcoil", "gravitycoil", "seat", "kart", "teamspawn"]
+	"speedcoil", "gravitycoil", "seat", "kart", "teamspawn", "sword", "flashlight", "balloon"]
 const SOLID := ["block", "ramp", "ball", "cyl", "stairs", "cone", "corner"]
 ## Decorative particle emitters (no collision).
 const EFFECTS := ["fire", "smoke", "sparkles"]
@@ -351,7 +354,7 @@ static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 				kart.position = at - Vector3(0, sz.y * 0.5, 0)
 				kart.rotation = rot
 				parent.add_child(kart)
-			"speedcoil", "gravitycoil":
+			"speedcoil", "gravitycoil", "sword", "flashlight", "balloon":
 				var gp := GearPickup.new()
 				gp.kind = t
 				gp.position = at

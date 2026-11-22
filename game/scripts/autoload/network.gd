@@ -21,6 +21,8 @@ signal welcomed(experience_id: String, snapshot: Dictionary)
 signal mode_event(ev: Dictionary)
 ## (authority only) a player touched a named scripted part.
 signal script_touched(peer_id: int, part_name: String)
+## Someone hit the local player (sword).
+signal damaged(amount: float, attacker: String)
 ## (authority only) a client is ready in a scripted game; data = its saved data.
 signal script_joined(peer_id: int, data: Dictionary)
 
@@ -222,6 +224,35 @@ func send_mode_event(ev: Dictionary, reliable: bool = true) -> void:
 		_mode_event.rpc(ev)
 	else:
 		_mode_event_u.rpc(ev)
+
+
+## "I hit player <target>": goes through the authority to the target.
+func send_hit(target: int, amount: float) -> void:
+	if mode == "client":
+		_hit_up.rpc_id(1, target, amount)
+	elif mode == "host":
+		_deliver_hit(1, target, amount)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _hit_up(target: int, amount: float) -> void:
+	if is_server():
+		_deliver_hit(multiplayer.get_remote_sender_id(), target, clampf(amount, 0.0, 50.0))
+
+
+func _deliver_hit(attacker: int, target: int, amount: float) -> void:
+	var who := str((players.get(attacker, {}) as Dictionary).get("name", "Someone"))
+	if attacker == 1 and mode == "host":
+		who = Game.player_name
+	if target == my_id() and mode == "host":
+		damaged.emit(amount, who)
+	elif players.has(target) and target != 1:
+		_damage.rpc_id(target, amount, who)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _damage(amount: float, attacker: String) -> void:
+	damaged.emit(clampf(amount, 0.0, 50.0), attacker)
 
 
 ## Client -> authority: "I'm in the game, here is my saved data".

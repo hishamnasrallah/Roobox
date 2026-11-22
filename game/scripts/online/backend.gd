@@ -124,6 +124,7 @@ func connect_backend() -> bool:
 		await client.update_display_name(Game.player_name)
 	await pull_progress()
 	await push_progress()
+	await check_admin()
 	status_changed.emit()
 	return true
 
@@ -300,13 +301,48 @@ func load_community(owner: String, key: String) -> Dictionary:
 func report_player(target_name: String, reason: String, context: Array) -> bool:
 	if not online:
 		return false
-	var key := "r%d_%d" % [Time.get_unix_time_from_system(), randi() % 100000]
-	var r := await client.write_object("reports", key, {
+	var r := await client.rpc("report", {
 		"target": target_name, "reason": reason, "context": context.slice(-20),
-		"reporter": Game.player_name, "time": int(Time.get_unix_time_from_system()),
-		"experience": Network.experience_id,
+		"reporter": Game.player_name, "experience": Network.experience_id,
 	})
-	return r["ok"]
+	return bool(r.get("ok", false))
+
+
+## Reports a community game (shows up for moderators).
+func report_game(owner: String, key: String, game_name: String) -> bool:
+	return await report_player("game:%s/%s" % [owner, key], "game report: " + game_name, [])
+
+
+# ---------------------------------------------------------- moderation ---
+
+var is_admin: bool = false
+
+
+## Asks the server whether this account is a moderator (ADMIN_USERS).
+func check_admin() -> bool:
+	is_admin = false
+	if online:
+		var r := await client.rpc("mod_check")
+		is_admin = bool(r.get("admin", false))
+	return is_admin
+
+
+func mod_reports() -> Array:
+	if not online:
+		return []
+	var r := await client.rpc("mod_reports")
+	var out: Variant = r.get("reports", [])
+	return out if out is Array else []
+
+
+func mod_dismiss(key: String) -> bool:
+	var r := await client.rpc("mod_dismiss", {"key": key})
+	return bool(r.get("ok", false))
+
+
+func mod_remove_game(owner: String, key: String) -> bool:
+	var r := await client.rpc("mod_remove_game", {"owner": owner, "key": key})
+	return bool(r.get("ok", false))
 
 
 # ------------------------------------------------------------ friends ---

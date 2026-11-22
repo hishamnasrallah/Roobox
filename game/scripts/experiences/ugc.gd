@@ -231,6 +231,11 @@ func _player_op(op: String, a: Array) -> void:
 		"message":
 			if hud != null:
 				hud.show_toast(str(a[0]), Color(0.6, 0.9, 1.0))
+		"damage":
+			player.damage(float(a[0]) if a.size() > 0 else 0.0)
+		"give_tool":
+			if a.size() > 0:
+				Game.give_tool(str(a[0]))
 		"save":
 			if a.size() >= 2 and not Game.testing:
 				GameData.save_value(GameData.game_key(level), str(a[0]), a[1])

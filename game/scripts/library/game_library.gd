@@ -637,6 +637,9 @@ func _gen_hangout() -> void:
 	for i in 4:
 		var a := TAU * i / 4.0
 		_part("light", Vector3(cos(a) * 8, 5, sin(a) * 8), Vector3.ONE, _col())
+	_part("sword", Vector3(-4, 1, 12), Vector3(1, 2, 1), 0)
+	_part("sword", Vector3(4, 1, 12), Vector3(1, 2, 1), 0)
+	_part("balloon", Vector3(0, 1, 14), Vector3(1, 2, 1), 10)
 	# Houses around.
 	for i in 6:
 		var a := TAU * i / 6.0 + 0.5
@@ -1536,6 +1539,7 @@ func _gen_buttons() -> void:
 	var count := 10 if hard == 0 else 12
 	for i in count:
 		_button(spots[i])
+	_part("flashlight", Vector3(4, 1, 26), Vector3(1, 2, 1), 6)
 	_part("block", Vector3(0, 2, 22), Vector3(4, 4, 4), 6, "gold", {"n": "prize"})
 	_coin(0, 5, 22)
 	script_text = BUTTONS_SCRIPT % count

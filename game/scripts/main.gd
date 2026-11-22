@@ -64,6 +64,7 @@ func _ready() -> void:
 	Network.player_left.connect(_on_player_left)
 	Network.state_received.connect(_on_state_received)
 	Network.chat_received.connect(_on_chat_bubble)
+	Network.damaged.connect(_on_damaged)
 	Network.mode_event.connect(_on_network_mode_event)
 	Network.script_touched.connect(_on_script_touched)
 	Network.script_joined.connect(_on_script_joined)
@@ -333,6 +334,7 @@ func _start_game(exp_id: String) -> void:
 	player.name = "Player"
 	player.position = spawn
 	player.kill_height = experience.kill_height
+	player.swung.connect(_on_swing)
 	experience.add_child(player)
 
 	avatar = Avatar.new()
@@ -481,6 +483,25 @@ func _go_home() -> void:
 
 
 # ------------------------------------------------------------ network ---
+
+## Sword swing: hit other players in front of us.
+func _on_swing(origin: Vector3, forward: Vector3) -> void:
+	for id: int in _remotes:
+		var av: Avatar = (_remotes[id] as RemotePlayer).avatar
+		if av == null or not av.visible:
+			continue
+		var d := av.global_position + Vector3(0, 1, 0) - origin
+		if d.length() < Tools.SWORD_RANGE and forward.dot(d.normalized()) > 0.2:
+			Network.send_hit(id, Tools.SWORD_DAMAGE)
+			Fx.burst(experience, av.global_position + Vector3(0, 1.2, 0), Color(1, 0.3, 0.3), 10, 4.0, 0.12, 0.4, -6.0)
+
+
+func _on_damaged(amount: float, attacker: String) -> void:
+	if player != null:
+		player.damage(amount, attacker)
+		if hud != null:
+			hud.add_chat_line(tr("%s hit you!") % attacker, Color(1.0, 0.6, 0.5))
+
 
 ## Chat speech bubbles above the speaker.
 func _on_chat_bubble(id: int, sender: String, text: String) -> void:

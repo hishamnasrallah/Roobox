@@ -334,8 +334,17 @@ func _player_ref(peer_id: int) -> RooScript.LuaTable:
 		"get_stat": _pl_get_stat.bind(peer_id),
 		"award_badge": _pl_badge.bind(peer_id),
 		"set_data": _pl_set_data.bind(peer_id),
+		"damage": _pl_value.bind(peer_id, "damage", 0.0, 1000.0),
+		"give_tool": _pl_give_tool.bind(peer_id),
 		"get_data": _pl_get_data.bind(peer_id),
 	})
+
+
+func _pl_give_tool(a: Array, peer_id: int) -> Array:
+	var id := RooScript.to_str(a[1] if a.size() > 1 else "")
+	if Tools.exists(id):
+		_player_op(peer_id, "give_tool", [id])
+	return []
 
 
 func _pl_set_data(a: Array, peer_id: int) -> Array:

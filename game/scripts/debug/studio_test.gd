@@ -299,6 +299,17 @@ end)
 	_check(Game.has_badge("dancer"), "emote badge")
 	player.give_gear("speedcoil")
 	_check(is_equal_approx(player.gear_speed, 1.6), "speed coil gear")
+	_check(Game.give_tool("sword") and not Game.give_tool("sword"), "sword goes in the backpack once")
+	Game.equip_tool(Game.backpack.find("sword"))
+	_check(Game.held_tool_id() == "sword" and player.avatar.held_tool() == "sword", "holding the sword")
+	await get_tree().physics_frame
+	_check(is_equal_approx(player.gear_speed, 1.0), "coil effect stops when you hold something else", player.gear_speed)
+	var swings: Array = []
+	player.swung.connect(func(_o: Vector3, _f: Vector3) -> void: swings.append(1))
+	Game.tool_used.emit()
+	_check(swings.size() == 1, "USE swings the sword")
+	player.damage(30.0)
+	_check(is_equal_approx(player.health, 70.0), "damage lowers health", player.health)
 	var gears := 0
 	for n3 in ex.get_children():
 		if n3 is GearPickup:

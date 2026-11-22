@@ -156,6 +156,7 @@ jobs:
       - name: Start Nakama + Postgres
         run: |
           cd backend
+          export ADMIN_USERS=roomodci
           docker compose up -d postgres nakama
           for i in $(seq 1 90); do
             if curl -sf http://127.0.0.1:7350/healthcheck > /dev/null; then echo "nakama is up"; break; fi
