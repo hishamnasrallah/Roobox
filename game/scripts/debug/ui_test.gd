@@ -92,6 +92,23 @@ func _run() -> void:
 		await menu.back_to_list()
 		await _frames(3)
 		_check(absi(sc.scroll_vertical - before) < 8, "BACK returns to the same place in the list", [before, sc.scroll_vertical])
+	# Fling: a quick swipe keeps the list gliding after the finger lifts.
+	sc.scroll_vertical = 0
+	await _frames(2)
+	var f0 := area.position + Vector2(area.size.x * 0.5, area.size.y * 0.8)
+	_button(f0, true)
+	var fp := f0
+	for i in 8:
+		fp += Vector2(0, -25)
+		_move(fp, Vector2(0, -25))
+		await get_tree().create_timer(0.01).timeout
+	var at_release := sc.scroll_vertical
+	_button(fp, false)
+	await get_tree().create_timer(0.5).timeout
+	_check(sc.scroll_vertical > at_release + 150, "a quick swipe keeps gliding", [at_release, sc.scroll_vertical])
+	_check(not bool(menu.get("_in_detail")), "a fling does not open a game")
+	await get_tree().create_timer(2.5).timeout
+	_check(not TouchScroll.busy(), "gliding stops by itself")
 	# Android back from the PLAY page scrolls to the top first.
 	_check(menu.go_back() and sc.scroll_vertical == 0, "back button goes to the top first")
 	if _fails.is_empty():

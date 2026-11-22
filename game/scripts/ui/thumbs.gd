@@ -25,27 +25,21 @@ static func enabled() -> bool:
 	return DisplayServer.get_name() != "headless"
 
 
-static func request(key: String, provider: Callable, callback: Callable, px: Vector2i = Vector2i(400, 225)) -> void:
+static func request(key: String, provider: Callable, callback: Callable, px: Vector2i = Vector2i(320, 180), on_screen: Callable = Callable()) -> void:
 	var full := "%s_v%d_%dx%d" % [key.validate_filename(), VERSION, px.x, px.y]
 	if _mem.has(full):
 		callback.call(_mem[full])
 		return
 	if not enabled():
 		return
-	var path := "%s/%s.jpg" % [DIR, full]
-	if FileAccess.file_exists(path):
-		var img := Image.load_from_file(path)
-		if img != null and not img.is_empty():
-			var tex := ImageTexture.create_from_image(img)
-			_remember(full, tex)
-			callback.call(tex)
-			return
 	if _inst == null or not is_instance_valid(_inst):
 		_inst = Thumbs.new()
 		_inst.name = "Thumbs"
 		var tree := Engine.get_main_loop() as SceneTree
 		tree.root.add_child.call_deferred(_inst)
-	_inst._queue.append({"key": full, "path": path, "provider": provider, "callback": callback, "px": px})
+	# Newest first: what just came on screen is what the player looks at.
+	_inst._queue.push_front({"key": full, "path": "%s/%s.jpg" % [DIR, full], "provider": provider,
+		"callback": callback, "px": px, "on_screen": on_screen})
 	_inst.set_process(true)
 
 
@@ -68,6 +62,9 @@ func _process(_delta: float) -> void:
 	if _queue.is_empty():
 		set_process(false)
 		return
+	# Never stutter a list the player is moving: wait until it stops.
+	if TouchScroll.busy():
+		return
 	var job: Dictionary = _queue.pop_front()
 	var cb: Callable = job["callback"]
 	if not cb.is_valid():
@@ -75,6 +72,16 @@ func _process(_delta: float) -> void:
 	if _mem.has(job["key"]):
 		cb.call(_mem[job["key"]])
 		return
+	var vis: Callable = job.get("on_screen", Callable())
+	if vis.is_valid() and not bool(vis.call()):
+		return  # scrolled away; the card asks again when it is back
+	if FileAccess.file_exists(job["path"]):
+		var img := Image.load_from_file(job["path"])
+		if img != null and not img.is_empty():
+			var tex := ImageTexture.create_from_image(img)
+			_remember(job["key"], tex)
+			cb.call(tex)
+			return
 	_render(job)
 
 
@@ -86,7 +93,7 @@ func _render(job: Dictionary) -> void:
 	vp.size = px
 	vp.own_world_3d = true
 	vp.transparent_bg = false
-	vp.msaa_3d = Viewport.MSAA_4X
+	vp.msaa_3d = Viewport.MSAA_2X
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(vp)
 	var world := Node3D.new()
@@ -99,7 +106,6 @@ func _render(job: Dictionary) -> void:
 	world.add_child(cam)
 	cam.look_at_from_position(shot["eye"], shot["target"], Vector3.UP)
 	cam.current = true
-	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	var img := vp.get_texture().get_image()
@@ -171,6 +177,5 @@ static func _environment(parent: Node3D, preset: String) -> void:
 	sun.light_color = sun_col
 	sun.light_energy = sun_e
 	sun.rotation_degrees = Vector3(-50, -35, 0)
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 160.0
+	sun.shadow_enabled = false
 	parent.add_child(sun)

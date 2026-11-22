@@ -7,15 +7,19 @@ extends Node
 ## did nothing. One shared manager watches the (touch-emulated) mouse:
 ##  - a press inside registered scroll areas starts tracking,
 ##  - once the finger moves past THRESHOLD along an axis that one of those
-##    areas can scroll, that area follows the finger (deepest area first, so
-##    a horizontal row inside a vertical page works both ways),
+##    areas can scroll, that area follows the finger 1:1 (deepest area
+##    first, so a sideways row inside a vertical page works both ways),
 ##  - the button under the finger is cancelled (no accidental press),
-##  - on release the list keeps gliding and slows down (kinetic scrolling).
+##  - on release the list keeps gliding with the finger's speed (measured
+##    over the last ~100 ms) and slows down smoothly.
+## While a list moves, busy() is true so heavy work (thumbnails) waits.
 ## Sliders and text editors keep their own drag behaviour.
 
-const THRESHOLD := 12.0
-const FRICTION := 0.06   # velocity left after one second of gliding
-const MAX_SPEED := 6000.0
+const THRESHOLD := 10.0
+## Velocity kept after one second of gliding (lower = stops sooner).
+const FRICTION := 0.08
+const MAX_SPEED := 7000.0
+const MIN_FLING := 250.0
 ## Our own fake "pointer moved away" events live far off screen.
 const FAR := -10000.0
 
@@ -28,10 +32,11 @@ var _axis_h: bool = false
 var _cands: Array = []
 var _start: Vector2 = Vector2.ZERO
 var _last: Vector2 = Vector2.ZERO
-var _last_ms: int = 0
+var _samples: Array = []   # [[msec, Vector2 position], ...]
 var _vel: Vector2 = Vector2.ZERO
 var _acc: Vector2 = Vector2.ZERO
 var _coast: ScrollContainer = null
+var _idle_at: int = 0
 
 
 ## Registers a ScrollContainer (safe to call many times).
@@ -40,6 +45,7 @@ static func attach(sc: ScrollContainer) -> ScrollContainer:
 		_scrolls.append(sc)
 	# Turn off Godot's own touch dragging so the two never fight.
 	sc.scroll_deadzone = 100000
+	sc.follow_focus = false
 	if _manager == null or not is_instance_valid(_manager):
 		_manager = TouchScroll.new()
 		_manager.name = "TouchScroll"
@@ -57,8 +63,14 @@ static func make(horizontal: bool) -> ScrollContainer:
 		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	else:
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sc.follow_focus = false
 	return attach(sc)
+
+
+## True while a finger is down on a list, a list is gliding, or just after.
+static func busy() -> bool:
+	if _manager == null or not is_instance_valid(_manager):
+		return false
+	return _manager._pressed or _manager._coast != null or Time.get_ticks_msec() - _manager._idle_at < 250
 
 
 func _ready() -> void:
@@ -67,8 +79,8 @@ func _ready() -> void:
 
 func _input(event: InputEvent) -> void:
 	var me := event as InputEventMouse
-	if me != null and me.position.x <= FAR * 0.5:
-		return  # our own cancel/release event
+	if me == null or me.position.x <= FAR * 0.5:
+		return  # not a pointer event, or our own cancel/release event
 	var mb := event as InputEventMouseButton
 	if mb != null:
 		if mb.button_index != MOUSE_BUTTON_LEFT:
@@ -89,6 +101,7 @@ func _on_press(pos: Vector2) -> void:
 	_acc = Vector2.ZERO
 	_active = null
 	_cands.clear()
+	_samples.clear()
 	for sc in _scrolls.duplicate():
 		if not is_instance_valid(sc):
 			_scrolls.erase(sc)
@@ -103,16 +116,17 @@ func _on_press(pos: Vector2) -> void:
 	_pressed = not _cands.is_empty()
 	_start = pos
 	_last = pos
-	_last_ms = Time.get_ticks_msec()
+	_samples.append([Time.get_ticks_msec(), pos])
 
 
 func _on_motion(mm: InputEventMouseMotion) -> void:
 	var pos := mm.position
 	var d := pos - _last
-	var now := Time.get_ticks_msec()
-	var dt := maxf((now - _last_ms) / 1000.0, 0.001)
 	_last = pos
-	_last_ms = now
+	var now := Time.get_ticks_msec()
+	_samples.append([now, pos])
+	while _samples.size() > 2 and now - int(_samples[0][0]) > 120:
+		_samples.pop_front()
 	if _active == null:
 		var total := pos - _start
 		if total.length() < THRESHOLD:
@@ -130,13 +144,13 @@ func _on_motion(mm: InputEventMouseMotion) -> void:
 		_cancel_buttons()
 	get_viewport().set_input_as_handled()
 	_scroll_by(_active, -d)
-	_vel = _vel.lerp((-d / dt).limit_length(MAX_SPEED), 0.35)
 
 
 func _on_release(mb: InputEventMouseButton) -> void:
 	if not _pressed:
 		return
 	_pressed = false
+	_idle_at = Time.get_ticks_msec()
 	if _active == null:
 		return
 	get_viewport().set_input_as_handled()
@@ -144,24 +158,44 @@ func _on_release(mb: InputEventMouseButton) -> void:
 	rel.position = Vector2(FAR, FAR)
 	rel.global_position = rel.position
 	_push.call_deferred(rel)
-	if Time.get_ticks_msec() - _last_ms < 90:
-		_coast = _active
-	else:
-		_vel = Vector2.ZERO
+	_vel = _release_velocity(mb.position)
+	var speed := absf(_vel.x if _axis_h else _vel.y)
+	_coast = _active if speed > MIN_FLING else null
 	_active = null
+
+
+## Finger speed over the last ~100 ms (px/s, in scroll direction).
+func _release_velocity(pos: Vector2) -> Vector2:
+	var now := Time.get_ticks_msec()
+	_samples.append([now, pos])
+	var first: Array = _samples[0]
+	for s: Array in _samples:
+		if now - int(s[0]) <= 100:
+			first = s
+			break
+	var dt := (now - int(first[0])) / 1000.0
+	if dt < 0.008:
+		return Vector2.ZERO
+	var v := -(pos - (first[1] as Vector2)) / dt
+	return v.limit_length(MAX_SPEED)
 
 
 func _process(delta: float) -> void:
 	if _coast == null:
 		return
+	_idle_at = Time.get_ticks_msec()
 	if not is_instance_valid(_coast) or not _coast.is_visible_in_tree():
 		_coast = null
 		return
 	_vel *= pow(FRICTION, delta)
-	if _vel.length() < 25.0:
+	if _vel.length() < 30.0:
 		_coast = null
 		return
+	var before := _coast.scroll_horizontal if _axis_h else _coast.scroll_vertical
 	_scroll_by(_coast, _vel * delta)
+	var after := _coast.scroll_horizontal if _axis_h else _coast.scroll_vertical
+	if before == after and absf((_vel * delta).x if _axis_h else (_vel * delta).y) >= 1.0:
+		_coast = null  # hit the end of the list
 
 
 ## Moves the button under the finger "away" so it does not fire on release.
@@ -176,7 +210,7 @@ func _cancel_buttons() -> void:
 func _push(ev: InputEvent) -> void:
 	var vp := get_viewport()
 	if vp != null:
-		vp.push_input(ev)
+		vp.push_input(ev, true)
 
 
 ## Is a drag in progress (tests / other code)?

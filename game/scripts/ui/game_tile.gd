@@ -18,6 +18,7 @@ var tile_size: Vector2 = Vector2(232, 182)
 var _thumb: TextureRect
 var _requested: bool = false
 var _scrolls: Array[ScrollContainer] = []
+var _check_t: float = 0.0
 
 
 func _ready() -> void:
@@ -80,20 +81,40 @@ func _on_pressed() -> void:
 	chosen.emit(game_id)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _requested:
 		set_process(false)
 		return
-	if not is_visible_in_tree():
+	_check_t -= delta
+	if _check_t > 0.0:
 		return
+	_check_t = 0.2
+	if not on_screen():
+		return
+	_requested = true
+	Thumbs.request(thumb_key, level_provider, _on_thumb, Vector2i(320, 180), on_screen_or_retry)
+
+
+## Is the card visible (inside the screen and every list it is in)?
+func on_screen() -> bool:
+	if not is_inside_tree() or not is_visible_in_tree():
+		return false
 	var r := get_global_rect()
 	if not r.intersects(get_viewport_rect()):
-		return
+		return false
 	for sc in _scrolls:
 		if is_instance_valid(sc) and not r.intersects(sc.get_global_rect()):
-			return
-	_requested = true
-	Thumbs.request(thumb_key, level_provider, _on_thumb)
+			return false
+	return true
+
+
+## For the thumbnail queue: if the card scrolled away, ask again later.
+func on_screen_or_retry() -> bool:
+	if on_screen():
+		return true
+	_requested = false
+	set_process(true)
+	return false
 
 
 func _on_thumb(tex: Texture2D) -> void:
