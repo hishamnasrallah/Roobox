@@ -132,6 +132,243 @@ local function mod_remove_game(context, payload)
 end
 nk.register_rpc(mod_remove_game, "mod_remove_game")
 
+-- -------------------------------------------------------------- admin ---
+-- Moderator tools. State per player lives in "mod_state" (owner = system):
+--   { banned, ban_ends (0 = forever), chat_ends, kick_at, reason }
+-- Every action is written to "mod_log".
+
+local function now_s()
+  return math.floor(nk.time() / 1000)
+end
+
+local function require_admin(context)
+  if not is_admin(context) then error("not allowed") end
+end
+
+local function decode(payload)
+  return nk.json_decode((payload ~= nil and payload ~= "") and payload or "{}")
+end
+
+local function mod_state(uid)
+  local objs = nk.storage_read({{ collection = "mod_state", key = uid, user_id = SYSTEM_ID }})
+  if objs and #objs > 0 then return objs[1].value end
+  return {}
+end
+
+local function set_mod_state(uid, v)
+  nk.storage_write({{ collection = "mod_state", key = uid, user_id = SYSTEM_ID, value = v,
+    permission_read = 0, permission_write = 0 }})
+end
+
+local function uid_of(u)
+  return u.user_id or u.id
+end
+
+local function find_user(query)
+  local q = tostring(query or "")
+  if q == "" then return nil end
+  local users = nk.users_get_username({ q })
+  if users and #users > 0 then return users[1] end
+  local ok, byid = pcall(nk.users_get_id, { q })
+  if ok and byid and #byid > 0 then return byid[1] end
+  return nil
+end
+
+local function log_action(context, action, target_id, target_name, details)
+  local by = ""
+  local me = nk.users_get_id({ context.user_id })
+  if me and #me > 0 then by = me[1].username end
+  local key = string.format("%015d_%s", math.floor(nk.time()), action)
+  nk.storage_write({{ collection = "mod_log", key = key, user_id = SYSTEM_ID, permission_read = 0, permission_write = 0,
+    value = { by = by, action = action, target_id = target_id, target = target_name,
+      details = tostring(details or ""):sub(1, 200), time = now_s() } }})
+end
+
+local function admin_user(context, payload)
+  require_admin(context)
+  local data = decode(payload)
+  local u = find_user(data.query)
+  if u == nil then return nk.json_encode({ found = false }) end
+  local uid = uid_of(u)
+  local games = {}
+  for _, o in ipairs(nk.storage_list(uid, "games_index", 100, "") or {}) do
+    table.insert(games, { key = o.key, name = o.value.name })
+  end
+  local reports = {}
+  for _, o in ipairs(nk.storage_list(SYSTEM_ID, "reports", 100, "") or {}) do
+    local t = tostring(o.value.target or "")
+    if t == u.username or t == u.display_name then
+      local r = o.value
+      r.key = o.key
+      table.insert(reports, r)
+    end
+  end
+  return nk.json_encode({ found = true, state = mod_state(uid), games = games, reports = reports,
+    user = { id = uid, username = u.username, display_name = u.display_name, create_time = u.create_time } })
+end
+nk.register_rpc(admin_user, "admin_user")
+
+-- Ban: hours > 0 = temporary (lifted automatically on the next login after
+-- it ends), 0 = forever. Nakama's own ban also ends open sessions.
+local function admin_ban(context, payload)
+  require_admin(context)
+  local data = decode(payload)
+  local uid = tostring(data.user_id or "")
+  local hours = tonumber(data.hours) or 0
+  local ends = 0
+  if hours > 0 then ends = now_s() + math.floor(hours * 3600) end
+  nk.users_ban_id({ uid })
+  local acc = nk.account_get_id(uid)
+  for _, d in ipairs((acc and acc.devices) or {}) do
+    nk.storage_write({{ collection = "bans_dev", key = tostring(d.id), user_id = SYSTEM_ID,
+      value = { user_id = uid, ends = ends }, permission_read = 0, permission_write = 0 }})
+  end
+  local st = mod_state(uid)
+  st.banned = true
+  st.ban_ends = ends
+  st.reason = tostring(data.reason or ""):sub(1, 200)
+  set_mod_state(uid, st)
+  log_action(context, "ban", uid, tostring(data.name or ""), hours > 0 and (hours .. "h: " .. st.reason) or ("forever: " .. st.reason))
+  return nk.json_encode({ ok = true, state = st })
+end
+nk.register_rpc(admin_ban, "admin_ban")
+
+local function lift_ban(uid)
+  nk.users_unban_id({ uid })
+  local acc = nk.account_get_id(uid)
+  for _, d in ipairs((acc and acc.devices) or {}) do
+    nk.storage_delete({{ collection = "bans_dev", key = tostring(d.id), user_id = SYSTEM_ID }})
+  end
+  local st = mod_state(uid)
+  st.banned = false
+  st.ban_ends = nil
+  set_mod_state(uid, st)
+  return st
+end
+
+local function admin_unban(context, payload)
+  require_admin(context)
+  local data = decode(payload)
+  local st = lift_ban(tostring(data.user_id or ""))
+  log_action(context, "unban", data.user_id, tostring(data.name or ""), "")
+  return nk.json_encode({ ok = true, state = st })
+end
+nk.register_rpc(admin_unban, "admin_unban")
+
+-- Temporary bans end on the next login attempt after their time is up.
+local function before_auth_device(context, payload)
+  local dev = (payload and payload.account and payload.account.id) or ""
+  if dev == "" then return payload end
+  local objs = nk.storage_read({{ collection = "bans_dev", key = dev, user_id = SYSTEM_ID }})
+  if objs and #objs > 0 then
+    local v = objs[1].value
+    local ends = tonumber(v.ends) or 0
+    if ends > 0 and now_s() >= ends then
+      lift_ban(tostring(v.user_id))
+    end
+  end
+  return payload
+end
+nk.register_req_before(before_auth_device, "AuthenticateDevice")
+
+-- Chat mute: hours > 0 mutes until then, 0 removes the mute.
+local function admin_mute(context, payload)
+  require_admin(context)
+  local data = decode(payload)
+  local uid = tostring(data.user_id or "")
+  local hours = tonumber(data.hours) or 0
+  local st = mod_state(uid)
+  st.chat_ends = hours > 0 and (now_s() + math.floor(hours * 3600)) or 0
+  set_mod_state(uid, st)
+  log_action(context, hours > 0 and "mute" or "unmute", uid, tostring(data.name or ""), hours > 0 and (hours .. "h") or "")
+  return nk.json_encode({ ok = true, state = st })
+end
+nk.register_rpc(admin_mute, "admin_mute")
+
+-- Kick: game servers that poll kick_list drop the player within seconds.
+local function admin_kick(context, payload)
+  require_admin(context)
+  local data = decode(payload)
+  local uid = tostring(data.user_id or "")
+  local st = mod_state(uid)
+  st.kick_at = now_s()
+  set_mod_state(uid, st)
+  log_action(context, "kick", uid, tostring(data.name or ""), "")
+  return nk.json_encode({ ok = true })
+end
+nk.register_rpc(admin_kick, "admin_kick")
+
+local function admin_delete_games(context, payload)
+  require_admin(context)
+  local data = decode(payload)
+  local uid = tostring(data.user_id or "")
+  local n = 0
+  for _, o in ipairs(nk.storage_list(uid, "games_index", 100, "") or {}) do
+    nk.storage_delete({
+      { collection = "games_index", key = o.key, user_id = uid },
+      { collection = "games", key = o.key, user_id = uid },
+    })
+    n = n + 1
+  end
+  log_action(context, "delete_games", uid, tostring(data.name or ""), n .. " games")
+  return nk.json_encode({ ok = true, deleted = n })
+end
+nk.register_rpc(admin_delete_games, "admin_delete_games")
+
+local function admin_log(context, payload)
+  require_admin(context)
+  local rows = {}
+  for _, o in ipairs(nk.storage_list(SYSTEM_ID, "mod_log", 100, "") or {}) do
+    local v = o.value
+    v.key = o.key
+    table.insert(rows, v)
+  end
+  table.sort(rows, function(a, b) return a.key > b.key end)
+  local out = {}
+  for i = 1, math.min(50, #rows) do table.insert(out, rows[i]) end
+  return nk.json_encode({ log = out })
+end
+nk.register_rpc(admin_log, "admin_log")
+
+-- For game servers (called with the server http key, no user): who to kick
+-- right now and who is muted.
+local function kick_list(context, payload)
+  if context.user_id ~= nil and context.user_id ~= "" and not is_admin(context) then error("not allowed") end
+  local t = now_s()
+  local kick = {}
+  local mute = {}
+  for _, o in ipairs(nk.storage_list(SYSTEM_ID, "mod_state", 100, "") or {}) do
+    local v = o.value
+    local ka = tonumber(v.kick_at) or 0
+    if v.banned or (ka > 0 and t - ka < 120) then table.insert(kick, o.key) end
+    local ce = tonumber(v.chat_ends) or 0
+    if ce > t then mute[o.key] = ce end
+  end
+  return nk.json_encode({ kick = kick, mute = mute, now = t })
+end
+nk.register_rpc(kick_list, "kick_list")
+
+-- A signed pass for joining game servers: "user_id|username|expires|chat_ends|signature".
+-- Game servers check it with the same JOIN_SECRET, so banned players
+-- (who can't sign in) can't join.
+local function join_ticket(context, payload)
+  local secret = (context.env and context.env["JOIN_SECRET"]) or ""
+  if secret == "" or context.user_id == nil then return nk.json_encode({ ticket = "" }) end
+  local st = mod_state(context.user_id)
+  local exp = now_s() + 600
+  local msg = table.concat({ context.user_id, context.username or "", tostring(exp), tostring(tonumber(st.chat_ends) or 0) }, "|")
+  local sig = nk.base16_encode(nk.hmac_sha256_hash(msg, secret))
+  return nk.json_encode({ ticket = msg .. "|" .. sig })
+end
+nk.register_rpc(join_ticket, "join_ticket")
+
+-- Your own moderation status (chat mute) for the app.
+local function my_status(context, payload)
+  local st = mod_state(context.user_id or "")
+  return nk.json_encode({ chat_ends = tonumber(st.chat_ends) or 0, now = now_s() })
+end
+nk.register_rpc(my_status, "my_status")
+
 -- --------------------------------------------------------- game stats ---
 -- Likes / dislikes / plays per game id (library "g:..." ids, featured ids,
 -- community "owner/key"). Counters are owned by the server; each player's

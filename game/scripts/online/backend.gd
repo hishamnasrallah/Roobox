@@ -125,6 +125,7 @@ func connect_backend() -> bool:
 	await pull_progress()
 	await push_progress()
 	await check_admin()
+	await refresh_my_status()
 	status_changed.emit()
 	return true
 
@@ -339,6 +340,53 @@ func count_play(id: String) -> void:
 # ---------------------------------------------------------- moderation ---
 
 var is_admin: bool = false
+
+
+## Signed pass for joining protected game servers ("" if not needed/offline).
+func join_ticket() -> String:
+	if not online:
+		return ""
+	var r := await client.rpc("join_ticket")
+	return str(r.get("ticket", ""))
+
+
+## Applies a chat mute set by a moderator to this device.
+func refresh_my_status() -> void:
+	if not online:
+		return
+	var r := await client.rpc("my_status")
+	Game.chat_muted_until = int(r.get("chat_ends", 0))
+
+
+## Admin: look up a player by username or id.
+## {found, user: {id, username, display_name}, state, games, reports}
+func admin_user(query: String) -> Dictionary:
+	if not online:
+		return {}
+	return await client.rpc("admin_user", {"query": query.strip_edges()})
+
+
+## Admin actions: "ban" {hours, reason}, "unban", "mute" {hours}, "kick",
+## "delete_games". Returns the server reply ({} on error / not allowed).
+func admin_action(action: String, user_id: String, user_name: String, extra: Dictionary = {}) -> Dictionary:
+	if not online:
+		return {}
+	var payload := {"user_id": user_id, "name": user_name}
+	payload.merge(extra, true)
+	return await client.rpc("admin_" + action, payload)
+
+
+func admin_log() -> Array:
+	if not online:
+		return []
+	var r := await client.rpc("admin_log")
+	var rows: Variant = r.get("log", [])
+	return rows if rows is Array else []
+
+
+func block_user(user_id: String) -> void:
+	if online and user_id != "":
+		await client.block_user(user_id)
 
 
 ## Asks the server whether this account is a moderator (ADMIN_USERS).

@@ -266,6 +266,9 @@ func refresh_coins() -> void:
 # ------------------------------------------------------------------ chat ---
 
 func open_chat() -> void:
+	if Game.chat_muted_until > int(Time.get_unix_time_from_system()):
+		show_toast("You are muted by a moderator", Color(1, 0.6, 0.5))
+		return
 	if not Game.chat_allowed():
 		show_toast("Chat is off (SETTINGS)", Color(1, 0.8, 0.5))
 		return
@@ -312,7 +315,9 @@ func add_chat_line(text: String, color: Color = Color(1, 1, 1)) -> void:
 	tw.tween_callback(l.queue_free)
 
 
-func _on_chat_received(_id: int, sender: String, text: String) -> void:
+func _on_chat_received(id: int, sender: String, text: String) -> void:
+	if Game.is_blocked(str((Network.players.get(id, {}) as Dictionary).get("uid", "")), sender):
+		return
 	_chat_history.append("%s: %s" % [sender, text])
 	if _chat_history.size() > 40:
 		_chat_history.pop_front()
@@ -468,7 +473,7 @@ func _next_tip() -> void:
 func _build_players_panel(root: Control) -> void:
 	_players_panel = PanelContainer.new()
 	_players_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	_players_panel.offset_left = -560
+	_players_panel.offset_left = -860
 	_players_panel.offset_right = -24
 	_players_panel.offset_top = 120
 	_players_panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
@@ -518,6 +523,30 @@ func _refresh_players() -> void:
 		var rb := UiStyle.button("REPORT", Color(0.7, 0.3, 0.3), 16, 46)
 		rb.pressed.connect(func() -> void: _report(pname))
 		row.add_child(rb)
+		var uid := str(info.get("uid", ""))
+		var bb := UiStyle.button("UNBLOCK" if Game.is_blocked(uid, pname) else "BLOCK", Color(0.35, 0.3, 0.35), 16, 46)
+		bb.pressed.connect(_toggle_block.bind(uid, pname))
+		row.add_child(bb)
+		if Network.mode == "host":
+			var kb := UiStyle.button("KICK", Color(0.8, 0.4, 0.2), 16, 46)
+			kb.pressed.connect(_kick.bind(id, pname))
+			row.add_child(kb)
+
+
+func _toggle_block(uid: String, pname: String) -> void:
+	if Game.is_blocked(uid, pname):
+		Game.unblock_player(pname)
+	else:
+		Game.block_player(uid, pname)
+		Backend.block_user(uid)
+		show_toast(tr("%s is blocked") % pname, Color(1, 0.85, 0.5))
+	_refresh_players()
+
+
+func _kick(id: int, pname: String) -> void:
+	Network.kick(id, "The host removed you from the game.")
+	add_chat_line(tr("You removed %s") % pname, Color(1.0, 0.7, 0.5))
+	get_tree().create_timer(0.6).timeout.connect(_refresh_players)
 
 
 func _toggle_mute(pname: String) -> void:

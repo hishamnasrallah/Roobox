@@ -1041,6 +1041,159 @@ func _refresh_swatches(key: String) -> void:
 var _parental_unlocked: bool = false
 
 
+func _build_blocked(c: Control) -> void:
+	if Game.blocked.is_empty():
+		return
+	_text(c, "Blocked players", 24, Color(1.0, 0.85, 0.3))
+	for b in Game.blocked:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		c.add_child(row)
+		var l := _text(row, str(b.get("name", "?")), 20)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var ub := UiStyle.button("UNBLOCK", Color(0.35, 0.38, 0.52), 16, 44)
+		ub.custom_minimum_size.x = 130
+		ub.pressed.connect(_unblock.bind(str(b.get("name", ""))))
+		row.add_child(ub)
+
+
+func _unblock(pname: String) -> void:
+	Game.unblock_player(pname)
+	open_tab("SETTINGS")
+
+
+# ---------------------------------------------------------------- admin ---
+## Admin panel (only for ADMIN_USERS): find a player, ban (temporary or
+## forever), mute chat, kick from game servers, delete their games, and
+## see the log of every moderator action.
+
+var _admin_box: VBoxContainer
+
+
+func _build_admin(c: Control) -> void:
+	_text(c, "Admin - players", 24, Color(1.0, 0.5, 0.4))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	c.add_child(row)
+	var q := UiStyle.line_edit("username or user id", 22)
+	q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(q)
+	var fb := UiStyle.button("FIND", Color(0.25, 0.5, 0.95), 20, 58)
+	fb.custom_minimum_size.x = 120
+	fb.pressed.connect(_admin_find.bind(q))
+	row.add_child(fb)
+	var lb := UiStyle.button("LOG", Color(0.35, 0.38, 0.52), 20, 58)
+	lb.custom_minimum_size.x = 100
+	lb.pressed.connect(_admin_show_log)
+	row.add_child(lb)
+	_admin_box = VBoxContainer.new()
+	_admin_box.add_theme_constant_override("separation", 8)
+	c.add_child(_admin_box)
+
+
+func _admin_clear() -> void:
+	for ch in _admin_box.get_children():
+		ch.queue_free()
+
+
+func _admin_find(q: LineEdit) -> void:
+	await _admin_open(q.text)
+
+
+func _admin_open(query: String) -> void:
+	if query.strip_edges() == "":
+		return
+	_admin_clear()
+	_text(_admin_box, "Searching...", 18, Color(1, 1, 1, 0.6))
+	var r: Dictionary = await Backend.admin_user(query)
+	if not is_instance_valid(_admin_box):
+		return
+	_admin_clear()
+	if not bool(r.get("found", false)):
+		_text(_admin_box, tr("No player found with that username or id."), 18, Color(1.0, 0.6, 0.5))
+		return
+	var u: Dictionary = r.get("user", {})
+	var st: Dictionary = r.get("state", {}) if r.get("state") is Dictionary else {}
+	var uid := str(u.get("id", ""))
+	var uname := str(u.get("username", ""))
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", UiStyle.box(Color(0.12, 0.14, 0.24, 0.9), 14, 12))
+	_admin_box.add_child(card)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	card.add_child(vb)
+	_text(vb, "%s  (@%s)" % [u.get("display_name", uname), uname], 24, Color(1.0, 0.9, 0.5))
+	_text(vb, "id: " + uid, 13, Color(1, 1, 1, 0.5))
+	var now := int(Time.get_unix_time_from_system())
+	var status: Array[String] = []
+	if bool(st.get("banned", false)):
+		var ends := int(st.get("ban_ends", 0))
+		status.append(tr("BANNED forever") if ends == 0 else tr("BANNED until %s") % _when(ends))
+	if int(st.get("chat_ends", 0)) > now:
+		status.append(tr("chat muted until %s") % _when(int(st["chat_ends"])))
+	if status.is_empty():
+		status.append(tr("No restrictions"))
+	_text(vb, "  -  ".join(status), 18, Color(1.0, 0.6, 0.5) if bool(st.get("banned", false)) else Color(0.6, 1.0, 0.65))
+	if str(st.get("reason", "")) != "":
+		_text(vb, tr("Reason: %s") % st["reason"], 15, Color(1, 1, 1, 0.7))
+	var reason := UiStyle.line_edit("reason (shown in the log)", 18)
+	reason.custom_minimum_size.y = 46
+	vb.add_child(reason)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	vb.add_child(grid)
+	var acts := [["BAN 1 DAY", "ban", 24.0, Color(0.7, 0.3, 0.25)], ["BAN 7 DAYS", "ban", 168.0, Color(0.7, 0.25, 0.2)],
+		["BAN FOREVER", "ban", 0.0, Color(0.6, 0.15, 0.15)], ["UNBAN", "unban", 0.0, Color(0.25, 0.55, 0.35)],
+		["MUTE 1 HOUR", "mute", 1.0, Color(0.6, 0.45, 0.2)], ["MUTE 1 DAY", "mute", 24.0, Color(0.6, 0.4, 0.15)],
+		["UNMUTE", "mute", 0.0, Color(0.25, 0.55, 0.35)], ["KICK", "kick", 0.0, Color(0.8, 0.45, 0.2)],
+		["DELETE GAMES", "delete_games", 0.0, Color(0.5, 0.2, 0.3)]]
+	for a in acts:
+		var b := UiStyle.button(tr(str(a[0])), a[3], 15, 46)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(_admin_do.bind(str(a[1]), float(a[2]), uid, uname, reason))
+		grid.add_child(b)
+	var games: Array = r.get("games", []) if r.get("games") is Array else []
+	_text(vb, tr("Published games: %d") % games.size(), 16, Color(1, 1, 1, 0.75))
+	for g in games:
+		_text(vb, "  - " + str((g as Dictionary).get("name", "?")), 15, Color(1, 1, 1, 0.65))
+	var reps: Array = r.get("reports", []) if r.get("reports") is Array else []
+	_text(vb, tr("Reports about this player: %d") % reps.size(), 16, Color(1, 1, 1, 0.75))
+	for rp in reps:
+		var d: Dictionary = rp
+		_text(vb, "  - %s (%s, %s)" % [d.get("reason", ""), d.get("reporter", "?"), _when(int(d.get("time", 0)))], 14, Color(1, 0.85, 0.75))
+
+
+func _admin_do(action: String, hours: float, uid: String, uname: String, reason: LineEdit) -> void:
+	var extra := {"hours": hours, "reason": reason.text.strip_edges()}
+	var r: Dictionary = await Backend.admin_action(action, uid, uname, extra)
+	if r.is_empty():
+		show_status(tr("That did not work (are you still a moderator?)."), true)
+		return
+	show_status(tr("Done: %s @%s") % [action, uname])
+	_admin_open(uname)
+
+
+func _admin_show_log() -> void:
+	_admin_clear()
+	var rows: Array = await Backend.admin_log()
+	if not is_instance_valid(_admin_box):
+		return
+	_admin_clear()
+	_text(_admin_box, tr("Moderator log (newest first)"), 20, Color(1.0, 0.85, 0.3))
+	if rows.is_empty():
+		_text(_admin_box, tr("Nothing yet."), 16, Color(1, 1, 1, 0.6))
+	for row in rows:
+		var d: Dictionary = row
+		_text(_admin_box, "%s  -  @%s  %s  %s  %s" % [_when(int(d.get("time", 0))), d.get("by", "?"),
+			str(d.get("action", "")).to_upper(), d.get("target", d.get("target_id", "")), d.get("details", "")], 15)
+
+
+func _when(t: int) -> String:
+	return Time.get_datetime_string_from_unix_time(t).replace("T", " ").substr(0, 16)
+
+
 ## Moderators (ADMIN_USERS on the server): review reports, remove games.
 func _build_moderation(c: Control) -> void:
 	_text(c, "Moderation", 24, Color(1.0, 0.5, 0.4))
@@ -1081,6 +1234,10 @@ func _load_reports(box: VBoxContainer) -> void:
 			var rg := UiStyle.button("REMOVE GAME", Color(0.7, 0.25, 0.25), 16, 44)
 			rg.pressed.connect(_mod_remove.bind(ref.get_slice("/", 0), ref.get_slice("/", 1), str(r.get("key", "")), box))
 			row.add_child(rg)
+		if not target.begins_with("game:") and _admin_box != null:
+			var vp := UiStyle.button("VIEW PLAYER", Color(0.25, 0.5, 0.95), 16, 44)
+			vp.pressed.connect(_admin_open.bind(target))
+			row.add_child(vp)
 		var db := UiStyle.button("DISMISS", Color(0.35, 0.38, 0.52), 16, 44)
 		db.pressed.connect(_mod_dismiss.bind(str(r.get("key", "")), box))
 		row.add_child(db)
@@ -1235,7 +1392,9 @@ func _build_settings() -> void:
 	c.add_child(chat)
 
 	_build_parental(c)
+	_build_blocked(c)
 	if Backend.online and Backend.is_admin:
+		_build_admin(c)
 		_build_moderation(c)
 
 	_text(c, "Account", 24, Color(1.0, 0.85, 0.3))

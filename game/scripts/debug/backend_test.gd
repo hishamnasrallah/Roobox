@@ -30,7 +30,8 @@ func _run() -> void:
 	# --- Sign up / login ---
 	var ra := await a.authenticate_device(_uid(), "alice" + tag)
 	_check(ra["ok"] and a.username.begins_with("alice"), "alice signs up", ra)
-	var rb := await b.authenticate_device(_uid(), "bob" + tag)
+	var bob_dev := _uid()
+	var rb := await b.authenticate_device(bob_dev, "bob" + tag)
 	_check(rb["ok"] and b.username.begins_with("bob"), "bob signs up", rb)
 	if not _fails.is_empty():
 		_finish()
@@ -172,7 +173,70 @@ func _run() -> void:
 			bob_sees = true
 	_check(bob_sees, "another player sees the published game")
 
+	await _admin_tests(a, b, bob_dev, m)
 	_finish()
+
+
+func _http_kick_list() -> Dictionary:
+	var http := HTTPRequest.new()
+	add_child(http)
+	http.request(url + "/v2/rpc/kick_list?http_key=defaulthttpkey&unwrap",
+		PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, "{}")
+	var res: Array = await http.request_completed
+	http.queue_free()
+	var d: Variant = JSON.parse_string((res[3] as PackedByteArray).get_string_from_utf8())
+	return d if d is Dictionary else {}
+
+
+## Admin tools (CI runs Nakama with ADMIN_USERS=roomodci, JOIN_SECRET=ci-join-secret).
+func _admin_tests(a: NakamaClient, b: NakamaClient, bob_dev: String, mod: NakamaClient) -> void:
+	var found := await mod.rpc("admin_user", {"query": b.username})
+	_check(bool(found.get("found", false)) and str((found.get("user", {}) as Dictionary).get("id", "")) == b.user_id,
+		"admin finds a player by username", found)
+	var nb := await b.rpc("admin_user", {"query": a.username})
+	_check(not bool(nb.get("found", false)), "normal players can't use admin tools", nb)
+	# Join pass for protected game servers.
+	var tk := await b.rpc("join_ticket")
+	var ticket := str(tk.get("ticket", ""))
+	var ok_pass := ServerGuard.verify(ticket, "ci-join-secret")
+	_check(ok_pass["ok"] and str(ok_pass["uid"]) == b.user_id, "join pass is signed and checks out", [ticket, ok_pass])
+	var bad_pass := ServerGuard.verify(ticket.replace(b.user_id, a.user_id), "ci-join-secret")
+	_check(not bad_pass["ok"], "a changed join pass is rejected", bad_pass)
+	# Mute + kick.
+	var mu := await mod.rpc("admin_mute", {"user_id": b.user_id, "name": b.username, "hours": 1})
+	var my := await b.rpc("my_status")
+	_check(bool(mu.get("ok", false)) and int(my.get("chat_ends", 0)) > int(my.get("now", 0)), "chat mute", [mu, my])
+	await mod.rpc("admin_kick", {"user_id": b.user_id, "name": b.username})
+	var kl := await _http_kick_list()
+	_check(b.user_id in (kl.get("kick", []) as Array) and (kl.get("mute", {}) as Dictionary).has(b.user_id),
+		"game servers get the kick and mute list (http key)", kl)
+	# Temporary ban: 2 seconds.
+	var bn := await mod.rpc("admin_ban", {"user_id": b.user_id, "name": b.username, "hours": 2.0 / 3600.0, "reason": "ci"})
+	_check(bool(bn.get("ok", false)), "ban a player", bn)
+	var again := NakamaClient.new(self, url)
+	var blocked_login := await again.authenticate_device(bob_dev, b.username)
+	_check(not blocked_login["ok"], "a banned player can't sign in", blocked_login)
+	await get_tree().create_timer(3.0).timeout
+	var later := NakamaClient.new(self, url)
+	var back := await later.authenticate_device(bob_dev, b.username)
+	_check(back["ok"] and later.user_id == b.user_id, "a temporary ban ends by itself", back)
+	# Permanent ban + unban.
+	await mod.rpc("admin_ban", {"user_id": b.user_id, "name": b.username, "hours": 0, "reason": "ci forever"})
+	var st := await mod.rpc("admin_user", {"query": b.username})
+	_check(bool((st.get("state", {}) as Dictionary).get("banned", false)), "ban shows in the admin panel", st)
+	var ub := await mod.rpc("admin_unban", {"user_id": b.user_id, "name": b.username})
+	var after := NakamaClient.new(self, url)
+	var ok_login := await after.authenticate_device(bob_dev, b.username)
+	_check(bool(ub.get("ok", false)) and ok_login["ok"], "unban lets the player back in", ok_login)
+	await mod.rpc("admin_mute", {"user_id": b.user_id, "name": b.username, "hours": 0})
+	# Delete a player's published games.
+	await a.write_object("games_index", "del1", {"name": "Del", "author": "a", "parts": 1, "updated": 1}, true)
+	var dg := await mod.rpc("admin_delete_games", {"user_id": a.user_id, "name": a.username})
+	_check(int(dg.get("deleted", 0)) >= 1, "delete all games of a player", dg)
+	var lg := await mod.rpc("admin_log")
+	_check((lg.get("log", []) as Array).size() >= 5, "every admin action is logged", (lg.get("log", []) as Array).size())
+	var bl := await a.block_user(after.user_id)
+	_check(bl["ok"], "block a player", bl)
 
 
 func _finish() -> void:

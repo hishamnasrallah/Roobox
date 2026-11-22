@@ -118,6 +118,10 @@ func _run_server(args: PackedStringArray) -> void:
 		printerr("[server] failed to start on port %d (error %d)" % [port, err])
 		get_tree().quit(1)
 		return
+	var guard := ServerGuard.new()
+	guard.name = "ServerGuard"
+	add_child(guard)
+	print("[server] sign-in required: %s" % ("yes" if ServerGuard.enabled() else "no (open server)"))
 	_start_mode(exp_id)
 
 
@@ -231,6 +235,10 @@ func _on_play_requested(exp_id: String, mode: String, address: String) -> void:
 			_on_play_requested(exp_id, "client", str(servers[0]))
 		"client":
 			var parsed := Network.parse_address(address)
+			Network.reject_reason = ""
+			Network.join_ticket = await Backend.join_ticket()
+			if menu == null:
+				return
 			var err := Network.join(parsed[0], parsed[1])
 			if err != OK:
 				menu.show_status("Bad address (error %d)." % err, true)
@@ -519,6 +527,8 @@ func _on_damaged(amount: float, attacker: String) -> void:
 func _on_chat_bubble(id: int, sender: String, text: String) -> void:
 	if not Game.chat_allowed() or sender in Game.muted:
 		return
+	if Game.is_blocked(str((Network.players.get(id, {}) as Dictionary).get("uid", "")), sender):
+		return
 	var av: Avatar = null
 	if id == Network.my_id() and player != null:
 		av = player.avatar
@@ -564,9 +574,13 @@ func _on_disconnected() -> void:
 	for id: int in _remotes:
 		(_remotes[id] as Node).queue_free()
 	_remotes.clear()
+	var why := Network.reject_reason
+	if menu != null and not _in_game:
+		menu.set_busy(false)
+		menu.show_status(why if why != "" else "Disconnected from the server.", true)
 	if hud != null:
 		hud.show_toast("DISCONNECTED", Color(1.0, 0.5, 0.4))
-		hud.add_chat_line("Lost connection - press MENU to go back.", Color(1.0, 0.7, 0.5))
+		hud.add_chat_line(((why + " ") if why != "" else "") + "Lost connection - press MENU to go back.", Color(1.0, 0.7, 0.5))
 		hud.set_info("")
 
 

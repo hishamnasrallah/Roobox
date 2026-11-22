@@ -38,6 +38,10 @@ var experience_id: String = "island"
 var snapshot_provider: Callable = Callable()
 ## "host:port" of the server we joined (for friends to follow us).
 var joined_address: String = ""
+## Signed pass from the account server, sent when joining (see ServerGuard).
+var join_ticket: String = ""
+## Why the server refused us (shown by the menu).
+var reject_reason: String = ""
 ## id -> {name, shirt, pants, skin}
 var players: Dictionary = {}
 
@@ -170,7 +174,11 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	_register.rpc_id(1, Game.profile())
+	var info := Game.profile()
+	info["ticket"] = join_ticket
+	if Backend.online:
+		info["uid"] = Backend.client.user_id
+	_register.rpc_id(1, info)
 	connection_succeeded.emit()
 
 
@@ -192,6 +200,13 @@ func _register(info: Dictionary) -> void:
 		return
 	var id := multiplayer.get_remote_sender_id()
 	var clean := _sanitize(info)
+	if mode == "server" and ServerGuard.enabled():
+		var check := ServerGuard.verify(str(info.get("ticket", "")))
+		if not check["ok"]:
+			_reject(id, str(check["error"]))
+			return
+		clean["uid"] = check["uid"]
+		clean["chat_ends"] = check["chat_ends"]
 	players[id] = clean
 	# Tell the newcomer about everyone already here.
 	for pid: int in players:
@@ -208,6 +223,29 @@ func _register(info: Dictionary) -> void:
 		snap = snapshot_provider.call()
 	_welcome.rpc_id(id, experience_id, snap)
 	print("[net] %s joined as %d (%d players)" % [clean["name"], id, players.size()])
+
+
+## Removes a player from the server (host KICK, moderator kick, bad pass).
+func kick(id: int, reason: String) -> void:
+	if not is_server() or id == 1:
+		return
+	_reject(id, reason)
+
+
+func _reject(id: int, reason: String) -> void:
+	_rejected.rpc_id(id, reason)
+	print("[net] removed %d: %s" % [id, reason])
+	get_tree().create_timer(0.3).timeout.connect(_drop_peer.bind(id))
+
+
+func _drop_peer(id: int) -> void:
+	if multiplayer.multiplayer_peer != null and id in multiplayer.get_peers():
+		multiplayer.multiplayer_peer.disconnect_peer(id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rejected(reason: String) -> void:
+	reject_reason = reason.substr(0, 200)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -331,6 +369,9 @@ func _chat_up(text: String) -> void:
 	var id := multiplayer.get_remote_sender_id()
 	if not players.has(id):
 		return
+	if int((players[id] as Dictionary).get("chat_ends", 0)) > int(Time.get_unix_time_from_system()):
+		_chat_down.rpc_id(id, 0, "Server", "You are muted by a moderator.")
+		return
 	_broadcast_chat(id, _clean_text(text, MAX_CHAT))
 
 
@@ -365,6 +406,7 @@ func _sanitize(info: Dictionary) -> Dictionary:
 		"pants": _color(info.get("pants"), Game.PANTS_COLORS[0]),
 		"skin": _color(info.get("skin"), Game.SKIN_COLORS[0]),
 		"items": _items(info.get("items")),
+		"uid": str(info.get("uid", "")).substr(0, 64),
 		"face": clampi(int(info.get("face", 0)), 0, Game.FACES.size() - 1),
 		"hair": clampi(int(info.get("hair", 0)), 0, Game.HAIRS.size() - 1),
 		"hair_color": _color(info.get("hair_color"), Game.HAIR_COLORS[0]),

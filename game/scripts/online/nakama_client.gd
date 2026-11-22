@@ -195,6 +195,11 @@ func add_friend_by_id(id: String) -> Dictionary:
 	return await request(HTTPClient.METHOD_POST, "/v2/friend?ids=%s" % q(id))
 
 
+## Blocks a user (they can't friend you; Nakama keeps the block).
+func block_user(id: String) -> Dictionary:
+	return await request(HTTPClient.METHOD_POST, "/v2/friend/block?ids=%s" % q(id))
+
+
 func remove_friend(id: String) -> Dictionary:
 	return await request(HTTPClient.METHOD_DELETE, "/v2/friend?ids=%s" % q(id))
 

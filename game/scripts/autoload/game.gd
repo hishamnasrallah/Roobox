@@ -113,6 +113,11 @@ var parental: Dictionary = {"pin": "", "no_chat": false, "no_online": false, "no
 var backpack: Array = []
 var held_tool: int = -1
 
+## Chat mute from a moderator (unix time; 0 = not muted).
+var chat_muted_until: int = 0
+## Players you blocked: [{name, uid}] (their chat and bubbles are hidden).
+var blocked: Array = []
+
 ## "" = not asked yet, "under13", "13plus" (asked on first launch).
 var age_group: String = ""
 
@@ -197,6 +202,7 @@ func load_profile() -> void:
 		recent = cfg.get_value("social", "recent", []) as Array
 		visits = cfg.get_value("social", "visits", {}) as Dictionary
 		age_group = str(cfg.get_value("settings", "age_group", ""))
+		blocked = cfg.get_value("social", "blocked", []) as Array
 		var pc: Variant = cfg.get_value("settings", "parental", {})
 		if pc is Dictionary:
 			parental.merge(pc as Dictionary, true)
@@ -257,6 +263,7 @@ func save_profile() -> void:
 	cfg.set_value("social", "visits", visits)
 	cfg.set_value("settings", "parental", parental)
 	cfg.set_value("settings", "age_group", age_group)
+	cfg.set_value("social", "blocked", blocked)
 	cfg.save(PROFILE_PATH)
 
 
@@ -462,7 +469,28 @@ func parental_locked() -> bool:
 
 ## Chat is shown/sent only if the player wants it and parents allow it.
 func chat_allowed() -> bool:
-	return chat_enabled and not parental_on("no_chat")
+	return chat_enabled and not parental_on("no_chat") and chat_muted_until <= int(Time.get_unix_time_from_system())
+
+
+## True when a player (by Nakama user id or name) is blocked.
+func is_blocked(uid: String, pname: String) -> bool:
+	for b in blocked:
+		if (uid != "" and str(b.get("uid", "")) == uid) or str(b.get("name", "")) == pname:
+			return true
+	return false
+
+
+func block_player(uid: String, pname: String) -> void:
+	if not is_blocked(uid, pname):
+		blocked.append({"uid": uid, "name": pname})
+		save_profile()
+
+
+func unblock_player(pname: String) -> void:
+	for b in blocked.duplicate():
+		if str(b.get("name", "")) == pname:
+			blocked.erase(b)
+	save_profile()
 
 
 # ---------------------------------------------------- badges & favorites ---
