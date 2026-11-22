@@ -132,4 +132,86 @@ local function mod_remove_game(context, payload)
 end
 nk.register_rpc(mod_remove_game, "mod_remove_game")
 
+-- --------------------------------------------------------- game stats ---
+-- Likes / dislikes / plays per game id (library "g:..." ids, featured ids,
+-- community "owner/key"). Counters are owned by the server; each player's
+-- own vote is remembered so voting again just changes it.
+
+local function stats_key(id)
+  return tostring(id or ""):sub(1, 100)
+end
+
+local function read_stats(key)
+  local objs = nk.storage_read({{ collection = "game_stats", key = key, user_id = SYSTEM_ID }})
+  if objs and #objs > 0 then
+    local v = objs[1].value
+    return { likes = tonumber(v.likes) or 0, dislikes = tonumber(v.dislikes) or 0, plays = tonumber(v.plays) or 0 }
+  end
+  return { likes = 0, dislikes = 0, plays = 0 }
+end
+
+local function write_stats(key, v)
+  nk.storage_write({{ collection = "game_stats", key = key, user_id = SYSTEM_ID, value = v,
+    permission_read = 2, permission_write = 0 }})
+end
+
+local function game_vote(context, payload)
+  local data = nk.json_decode(payload ~= "" and payload or "{}")
+  local key = stats_key(data.id)
+  if key == "" or context.user_id == nil then error("bad request") end
+  local v = math.max(-1, math.min(1, math.floor(tonumber(data.v) or 0)))
+  local prev = 0
+  local mine = nk.storage_read({{ collection = "votes", key = key, user_id = context.user_id }})
+  if mine and #mine > 0 then prev = tonumber(mine[1].value.v) or 0 end
+  local st = read_stats(key)
+  if prev == 1 then st.likes = math.max(0, st.likes - 1) end
+  if prev == -1 then st.dislikes = math.max(0, st.dislikes - 1) end
+  if v == 1 then st.likes = st.likes + 1 end
+  if v == -1 then st.dislikes = st.dislikes + 1 end
+  write_stats(key, st)
+  nk.storage_write({{ collection = "votes", key = key, user_id = context.user_id, value = { v = v },
+    permission_read = 1, permission_write = 0 }})
+  st.my = v
+  return nk.json_encode(st)
+end
+nk.register_rpc(game_vote, "game_vote")
+
+local function game_play(context, payload)
+  local data = nk.json_decode(payload ~= "" and payload or "{}")
+  local key = stats_key(data.id)
+  if key == "" then error("bad request") end
+  local st = read_stats(key)
+  st.plays = st.plays + 1
+  write_stats(key, st)
+  return nk.json_encode(st)
+end
+nk.register_rpc(game_play, "game_play")
+
+local function game_stats(context, payload)
+  local data = nk.json_decode(payload ~= "" and payload or "{}")
+  local ids = {}
+  local mine = {}
+  for i, id in ipairs(data.ids or {}) do
+    if i > 50 then break end
+    local key = stats_key(id)
+    table.insert(ids, { collection = "game_stats", key = key, user_id = SYSTEM_ID })
+    if context.user_id then
+      table.insert(mine, { collection = "votes", key = key, user_id = context.user_id })
+    end
+  end
+  local out = {}
+  for _, o in ipairs(nk.storage_read(ids) or {}) do
+    out[o.key] = { likes = tonumber(o.value.likes) or 0, dislikes = tonumber(o.value.dislikes) or 0,
+      plays = tonumber(o.value.plays) or 0, my = 0 }
+  end
+  if #mine > 0 then
+    for _, o in ipairs(nk.storage_read(mine) or {}) do
+      if out[o.key] == nil then out[o.key] = { likes = 0, dislikes = 0, plays = 0, my = 0 } end
+      out[o.key].my = tonumber(o.value.v) or 0
+    end
+  end
+  return nk.json_encode({ stats = out })
+end
+nk.register_rpc(game_stats, "game_stats")
+
 nk.logger_info("Roobox module loaded")

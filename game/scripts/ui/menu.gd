@@ -528,6 +528,42 @@ func _fav_row(id: String) -> void:
 	var l := _text(row, tr("You played this %d times") % plays if plays > 0 else tr("New for you"), 18, Color(1, 1, 1, 0.7))
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	if Backend.online:
+		var like := UiStyle.button("LIKE", Color(0.25, 0.45, 0.3), 16, 50)
+		like.custom_minimum_size.x = 120
+		row.add_child(like)
+		var dislike := UiStyle.button("DISLIKE", Color(0.45, 0.28, 0.28), 16, 50)
+		dislike.custom_minimum_size.x = 130
+		row.add_child(dislike)
+		var info := _text(_content, "", 16, Color(1, 1, 1, 0.65))
+		like.pressed.connect(_vote.bind(id, 1, like, dislike, info))
+		dislike.pressed.connect(_vote.bind(id, -1, like, dislike, info))
+		_load_stats(id, like, dislike, info)
+
+
+func _load_stats(id: String, like: Button, dislike: Button, info: Label) -> void:
+	var all: Dictionary = await Backend.game_stats([id])
+	if is_instance_valid(info):
+		_show_stats(all.get(id, {}), like, dislike, info)
+
+
+func _vote(id: String, v: int, like: Button, dislike: Button, info: Label) -> void:
+	var cur := int(like.get_meta("my", 0))
+	var st: Dictionary = await Backend.vote(id, 0 if cur == v else v)
+	if is_instance_valid(info) and not st.is_empty():
+		_show_stats(st, like, dislike, info)
+
+
+func _show_stats(st: Dictionary, like: Button, dislike: Button, info: Label) -> void:
+	var my := int(st.get("my", 0))
+	like.set_meta("my", my)
+	like.text = tr("LIKE %d") % int(st.get("likes", 0))
+	dislike.text = tr("DISLIKE %d") % int(st.get("dislikes", 0))
+	like.add_theme_stylebox_override("normal", UiStyle.box(Color(0.2, 0.7, 0.35) if my == 1 else Color(0.25, 0.45, 0.3), 18, 10))
+	dislike.add_theme_stylebox_override("normal", UiStyle.box(Color(0.75, 0.3, 0.3) if my == -1 else Color(0.45, 0.28, 0.28), 18, 10))
+	var likes := int(st.get("likes", 0))
+	var total := likes + int(st.get("dislikes", 0))
+	info.text = tr("%d plays") % int(st.get("plays", 0)) + ("   -   %d%% liked" % int(100.0 * likes / total) if total > 0 else "")
 
 
 func _toggle_fav(id: String, b: Button) -> void:
@@ -541,6 +577,7 @@ func _style_fav(b: Button, on: bool) -> void:
 
 func _play_library(game_id: String, mode: String) -> void:
 	Game.note_played(game_id)
+	Backend.count_play(game_id)
 	Game.pending_level = GameLibrary.generate(game_id)
 	Game.testing = false
 	_play("ugc", mode, "")
@@ -771,6 +808,7 @@ func _play(exp_id: String, mode: String, address: String) -> void:
 		show_status(tr("Playing with others is turned off in parental controls."), true)
 		return
 	Game.note_played(exp_id)
+	Backend.count_play(exp_id)
 	_save_name_if_needed()
 	play_requested.emit(exp_id, mode, address)
 
@@ -805,6 +843,9 @@ func _build_avatar() -> void:
 	_add_swatches(_content, "Shirt", "shirt", Game.SHIRT_COLORS)
 	_add_swatches(_content, "Pants", "pants", Game.PANTS_COLORS)
 	_add_swatches(_content, "Skin", "skin", Game.SKIN_COLORS)
+	_add_choice(_content, "Face", "face", Game.FACES, Game.face_index)
+	_add_choice(_content, "Hair", "hair", Game.HAIRS, Game.hair_index)
+	_add_swatches(_content, "Hair color", "hair_color", Game.HAIR_COLORS)
 
 	_text(_content, "Avatar shop", 30, Color(1.0, 0.85, 0.3))
 	_text(_content, "Collect coins in any game to buy items. Tap an item you own to wear or remove it.", 18, Color(1, 1, 1, 0.7))
@@ -902,6 +943,33 @@ func _on_name_changed(t: String) -> void:
 	profile_changed.emit()
 
 
+## A row of named choices (face, hair style).
+func _add_choice(parent: Control, title: String, key: String, labels: Array[String], current: int) -> void:
+	_text(parent, title, 22)
+	var sc := TouchScroll.make(true)
+	sc.custom_minimum_size.y = 56
+	parent.add_child(sc)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	sc.add_child(row)
+	for i in labels.size():
+		var b := UiStyle.button(tr(labels[i]), Color(0.95, 0.55, 0.2) if i == current else Color(0.25, 0.3, 0.48), 16, 50)
+		b.custom_minimum_size.x = 110
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_choose.bind(key, i))
+		row.add_child(b)
+
+
+func _choose(key: String, idx: int) -> void:
+	if key == "face":
+		Game.face_index = idx
+	else:
+		Game.hair_index = idx
+	Game.save_profile()
+	profile_changed.emit()
+	open_tab("AVATAR")
+
+
 func _add_swatches(parent: Control, title: String, key: String, colors: Array[Color]) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -929,6 +997,8 @@ func _current(key: String) -> int:
 			return Game.shirt_index
 		"pants":
 			return Game.pants_index
+		"hair_color":
+			return Game.hair_color_index
 		_:
 			return Game.skin_index
 
@@ -939,6 +1009,8 @@ func _pick(key: String, idx: int) -> void:
 			Game.shirt_index = idx
 		"pants":
 			Game.pants_index = idx
+		"hair_color":
+			Game.hair_color_index = idx
 		_:
 			Game.skin_index = idx
 	Sfx.play("click")

@@ -5,6 +5,28 @@ extends RefCounted
 const HELP := "on_start(fn)  on_touch(\"name\", fn(player))  after(sec, fn)  every(sec, fn)  cancel(id)  time()  print(...)\nworld.find(\"name\"):set_color(i) / set_visible(b) / set_solid(b) / move_to(x,y,z,sec) / move_by(dx,dy,dz,sec) / position() / destroy()\nplayer:teleport(x,y,z) / kill() / give_coins(n) / set_speed(v) / set_jump(v) / message(text) / position()   player.name\nui.message(text, sec)  ui.status(text)  score.add(n) score.set(n) score.get()   Name parts with SELECT > name."
 
 const TEMPLATES: Array = [
+	["BUTTONS", """-- On-screen buttons and a label (works for every player).
+local clicks = 0
+ui.label("info", "Tap the buttons!")
+ui.button("boost", "SPEED BOOST", function(player)
+  player:set_speed(20)
+  ui.sound("boing")
+  after(5, function() player:set_speed(8.5) end)
+end)
+ui.button("coins", "+5 COINS", function(player)
+  player:give_coins(5)
+  clicks = clicks + 1
+  ui.label("info", "Buttons pressed: " .. clicks)
+end)
+"""],
+	["SAVE", """-- Remember each player's visits between sessions.
+on_join(function(player)
+  local visits = (player:get_data("visits") or 0) + 1
+  player:set_data("visits", visits)
+  player:set_stat("Visits", visits)
+  player:message("Welcome back! Visit number " .. visits)
+end)
+"""],
 	["DOOR", """-- Name one part "button" and another "door" (SELECT > name).
 on_touch("button", function(player)
   local door = world.find("door")

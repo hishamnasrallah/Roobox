@@ -228,6 +228,9 @@ func _run() -> void:
   ui.status("hello")
 end)
 every(0.5, function() score.add(1) end)
+ui.label("l1", "hello")
+ui.button("b1", "PRESS", function(p) p:give_coins(3) end)
+ui.sound("pop")
 on_join(function(p)
   p:set_stat("Joined", 1)
   p:set_stat("Team", p.team)
@@ -322,6 +325,13 @@ end)
 		[ex.get("teams"), ex.get("my_team")])
 	_check(hs != null and str((hs._stats.get(Network.my_id(), {}) as Dictionary).get("Team", "")) == "Blue",
 		"scripts see the player's team", hs._stats if hs != null else null)
+	var hud_node: Node = main.get("hud")
+	var items: Dictionary = hud_node.get("_gui_items") if hud_node != null else {}
+	_check(items.has("l1") and items.has("b1") and items["b1"] is Button, "script GUI label and button", items.keys())
+	var c_gui := Game.lifetime_coins
+	main.call("_on_gui_pressed", "b1")
+	await get_tree().process_frame
+	_check(Game.lifetime_coins == c_gui + 3, "script button runs its function", [c_gui, Game.lifetime_coins])
 	var kart: Kart = null
 	var seat: Seat = null
 	for n4 in ex.get_children():

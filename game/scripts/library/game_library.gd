@@ -1,6 +1,6 @@
 class_name GameLibrary
 extends RefCounted
-## The built-in game library: 18 game types x 16 themes = 288 original games.
+## The built-in game library: 19 game types x 16 themes = 304 original games.
 ## Every game type has TWO different map layouts (e.g. Obby: a straight run
 ## or a spiral climb around a pillar) and the themes also change the
 ## difficulty, so games of the same type play differently - not only look
@@ -27,6 +27,7 @@ const GENRES: Array[Dictionary] = [
 	{"id": "dropper", "title": "Dropper", "desc": "Jump in and fall: dodge the lava obstacles and splash into the pool."},
 	{"id": "sweeper", "title": "Spinner Survival", "desc": "Jump over the spinning bar. Every hit resets your time!"},
 	{"id": "buttons", "title": "Button Hunt", "desc": "Hidden buttons everywhere - find them all to unlock the prize."},
+	{"id": "arena", "title": "Sword Arena", "desc": "Grab a sword and battle your friends - or go Red vs Blue!"},
 ]
 
 ## Two map layouts per game type (picked by the theme).
@@ -39,7 +40,7 @@ const LAYOUTS: Dictionary = {
 	"doors": ["Door Corridor", "Room Grid"], "swim": ["Pools", "Lake"], "hangout": ["Disco", "Park"],
 	"tycoon": ["Factory", "Farm"], "floorfall": ["Square Floors", "Round Floors"],
 	"dropper": ["Shaft", "Sky Drop"], "sweeper": ["Round Arena", "Square Arena"],
-	"buttons": ["Mansion", "Park"],
+	"buttons": ["Mansion", "Park"], "arena": ["Colosseum", "Castle Siege"],
 }
 const DIFFICULTY: Array[String] = ["Easy", "Normal", "Hard"]
 
@@ -71,6 +72,7 @@ const GENRE_COLORS: Dictionary = {
 	"vanish": Color(0.7, 0.55, 0.95), "doors": Color(0.85, 0.6, 0.3), "swim": Color(0.25, 0.55, 1.0),
 	"hangout": Color(1.0, 0.5, 0.75), "tycoon": Color(0.35, 0.85, 0.45), "floorfall": Color(0.95, 0.75, 0.3),
 	"dropper": Color(0.45, 0.6, 1.0), "sweeper": Color(1.0, 0.35, 0.3), "buttons": Color(0.95, 0.45, 0.85),
+	"arena": Color(0.8, 0.8, 0.9),
 }
 
 
@@ -1570,3 +1572,69 @@ func _gen_buttons_b() -> void:
 	_part("block", Vector3(0, 2, 0), Vector3(4, 4, 4), 6, "gold", {"n": "prize"})
 	_coin(0, 5, 0)
 	script_text = BUTTONS_SCRIPT % count
+
+
+func _gen_arena() -> void:
+	# Colosseum: a round arena with swords, platforms and ramps.
+	var cs: Array = theme["colors"]
+	_ground(76)
+	_part("cyl", Vector3(0, 0.5, 0), Vector3(42, 1, 42), int(cs[0]), str(theme["ground"]))
+	for i in 18:
+		var a := TAU * i / 18.0
+		if absf(wrapf(a - PI * 0.5, -PI, PI)) < 0.3:
+			continue
+		var w := Vector3(roundf(cos(a) * 21.5), 3, roundf(sin(a) * 21.5))
+		_part("block", w, Vector3(7, 4, 1.5), int(cs[1]), str(theme["path"][0]), {"ry": rad_to_deg(-a) + 90.0})
+	_spawn(0, 1, 15)
+	for i in 6:
+		var a := TAU * i / 6.0
+		_part("sword", Vector3(roundf(cos(a) * 9), 2, roundf(sin(a) * 9)), Vector3(1, 2, 1), 0)
+	for i in 4:
+		var a := TAU * i / 4.0 + PI * 0.25
+		var c := Vector3(roundf(cos(a) * 15), 0, roundf(sin(a) * 15))
+		_plat(c.x, 3.5, c.z, Vector3(4, 2.5, 4), _col(), _path_mat())
+		_part("balloon", c + Vector3(0, 4.5, 0), Vector3(1, 2, 1), 10)
+	_plat(0, 3, 0, Vector3(6, 2, 6), _col(), _path_mat())
+	_part("ramp", Vector3(0, 2, 5), Vector3(4, 2, 4), _col(), _path_mat(), {"r": 3})
+	_part("light", Vector3(0, 7, 0), Vector3.ONE, 6)
+	_decor(32, 12)
+	script_text = """-- Sword Arena: grab a sword (it goes in your backpack), USE to swing.
+on_start(function() ui.status("Grab a sword and battle!") end)
+on_join(function(player)
+  player:message("Swords are around the arena - press USE to swing")
+end)
+"""
+
+
+func _gen_arena_b() -> void:
+	# Castle Siege: Red castle vs Blue castle, a bridge over lava.
+	var cs: Array = theme["colors"]
+	_part("kill", Vector3(0, -2, 0), Vector3(90, 1, 100), 4)
+	for side in [-1.0, 1.0]:
+		var z := side * 28.0
+		var tc := 4 if side < 0.0 else 8
+		_plat(0, 0, z, Vector3(28, 2, 18), int(cs[0]), str(theme["ground"]))
+		_part("block", Vector3(0, 3, z + side * 8.5), Vector3(28, 6, 1), int(cs[1]), "cobble")
+		_part("block", Vector3(-13.5, 3, z), Vector3(1, 6, 18), int(cs[1]), "cobble")
+		_part("block", Vector3(13.5, 3, z), Vector3(1, 6, 18), int(cs[1]), "cobble")
+		for sx in [-1.0, 1.0]:
+			_part("cyl", Vector3(sx * 13, 4.5, z + side * 8), Vector3(4, 9, 4), int(cs[1]), "cobble")
+			_part("cone", Vector3(sx * 13, 10, z + side * 8), Vector3(4.6, 2, 4.6), tc)
+		_part("teamspawn", Vector3(0, 0.5, z + side * 4), Vector3(4, 1, 4), tc)
+		_part("teamspawn", Vector3(-6, 0.5, z + side * 4), Vector3(4, 1, 4), tc)
+		_part("sword", Vector3(-4, 1, z - side * 2), Vector3(1, 2, 1), 0)
+		_part("sword", Vector3(4, 1, z - side * 2), Vector3(1, 2, 1), 0)
+		_part("sign", Vector3(0, 2, z - side * 8.8), Vector3(5, 1.6, 0.3), 3, "",
+			{"txt": "RED CASTLE" if side < 0.0 else "BLUE CASTLE", "r": 2 if side < 0.0 else 0})
+	_plat(0, 0, 0, Vector3(4, 1, 40), 3, "planks")
+	_spawn(0, 0, 0)
+	for sx in [-1.0, 1.0]:
+		_plat(sx * 10, 0, 0, Vector3(6, 1, 6), _col(), _path_mat())
+		_part("jumppad", Vector3(sx * 10, 0.5, 0), Vector3(3, 1, 3), 8)
+		_plat(sx * 10, 6, -8 * sx, Vector3(4, 1, 4), _col(), _path_mat())
+	script_text = """-- Castle Siege: Red vs Blue. Grab a sword in your castle!
+on_start(function() ui.status("Red vs Blue - grab a sword and cross the bridge!") end)
+on_join(function(player)
+  player:set_stat("Team", player.team)
+end)
+"""

@@ -396,6 +396,7 @@ func _start_game(exp_id: String) -> void:
 func _setup_ugc_scripts() -> void:
 	var ugc := experience
 	ugc.connect("touched", _on_ugc_touched)
+	hud.gui_pressed.connect(_on_gui_pressed)
 	if (Network.mode == "offline" or Network.mode == "host") and ugc.call("has_script"):
 		var host := ScriptHost.new()
 		host.name = "ScriptHost"
@@ -431,7 +432,18 @@ func _on_ugc_touched(part_name: String) -> void:
 
 func _on_script_touched(peer_id: int, part_name: String) -> void:
 	if game_mode is ScriptHost:
-		(game_mode as ScriptHost).fire_touch(part_name, peer_id)
+		if part_name.begins_with("gui:"):
+			(game_mode as ScriptHost).fire_gui(part_name.substr(4), peer_id)
+		else:
+			(game_mode as ScriptHost).fire_touch(part_name, peer_id)
+
+
+## A script button was pressed on this device.
+func _on_gui_pressed(id: String) -> void:
+	if game_mode is ScriptHost:
+		(game_mode as ScriptHost).fire_gui(id, Network.my_id())
+	elif Network.mode == "client":
+		Network.send_script_touch("gui:" + id)
 
 
 func _on_script_joined(peer_id: int, data: Dictionary) -> void:

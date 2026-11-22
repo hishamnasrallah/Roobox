@@ -313,6 +313,29 @@ func report_game(owner: String, key: String, game_name: String) -> bool:
 	return await report_player("game:%s/%s" % [owner, key], "game report: " + game_name, [])
 
 
+# ---------------------------------------------------------- game stats ---
+
+## Likes / dislikes / plays: {id: {likes, dislikes, plays, my}} (my = your vote).
+func game_stats(ids: Array) -> Dictionary:
+	if not online or ids.is_empty():
+		return {}
+	var r := await client.rpc("game_stats", {"ids": ids.slice(0, 50)})
+	var st: Variant = r.get("stats", {})
+	return st if st is Dictionary else {}
+
+
+## v = 1 like, -1 dislike, 0 remove your vote. Returns the new counts.
+func vote(id: String, v: int) -> Dictionary:
+	if not online:
+		return {}
+	return await client.rpc("game_vote", {"id": id, "v": v})
+
+
+func count_play(id: String) -> void:
+	if online and id != "" and id != "ugc":
+		client.rpc("game_play", {"id": id})
+
+
 # ---------------------------------------------------------- moderation ---
 
 var is_admin: bool = false

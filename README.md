@@ -52,11 +52,11 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 كل لعبة: SOLO / PLAY ONLINE / HOST ON WI-FI / JOIN. بالألعاب الجماعية السيرفر (أو الـ Host) هو الحَكَم على توقيت الجولات.
 لإضافة لعبة جديدة: كلاس يورث `Experience` (العالم) + اختيارياً `GameMode` (منطق الجولات) + سطر بـ `Catalog.ENTRIES`.
 
-## مكتبة الألعاب (288 لعبة)
+## مكتبة الألعاب (304 لعبة)
 
-18 نوع × 16 ثيم، كلها ألعاب أصلية مولّدة من نفس صيغة المحرر. **كل نوع إله خريطتين مختلفتين بالبنية** (مش بس بالألوان) و3 مستويات صعوبة:
+19 نوع × 16 ثيم، كلها ألعاب أصلية مولّدة من نفس صيغة المحرر. **كل نوع إله خريطتين مختلفتين بالبنية** (مش بس بالألوان) و3 مستويات صعوبة:
 - **الأنواع (الخريطة أ / ب):** Obby (مستقيم / تسلّق حلزوني حوالين عمود)، Tower (درج حلزوني / برج طوابق كل طابق إله عائق وطريقة طلوع)، Parkour (عوائق / أسطح مباني)، Maze (بجدران / متاهة معلّقة فوق اللافا)، Floor is Lava (حلزون / أعمدة درج)، Coin Hunt (أرض مفتوحة / قرية بيوت)، Sky Islands (سلسلة / حلقة جزر + تاج)، Race (حلبة / نزلة من برج)، Trampoline Park (برج / ساحة)، Vanishing Path (مسار / شبكة)، Button Doors (ممر / شبكة غرف)، Water Course (برك / بحيرة)، Hangout (ديسكو / حديقة).
-- **أنواع جديدة بميكانيك مختلف:** **Tycoon** (مصاري كل ثانية + أزرار شراء بتبني المصنع/المزرعة)، **Floor Fall** (البلاط بيوقع بعد ما تدوس عليه)، **Dropper** (سقوط حر بين عوائق لافا لبركة)، **Spinner Survival** (اقفز عن العصا الدوّارة)، **Button Hunt** (دوّر على أزرار مخبّاة لتفتح الجائزة).
+- **أنواع جديدة بميكانيك مختلف:** **Tycoon** (مصاري كل ثانية + أزرار شراء بتبني المصنع/المزرعة)، **Floor Fall** (البلاط بيوقع بعد ما تدوس عليه)، **Dropper** (سقوط حر بين عوائق لافا لبركة)، **Spinner Survival** (اقفز عن العصا الدوّارة)، **Button Hunt** (دوّر على أزرار مخبّاة لتفتح الجائزة)، **Sword Arena** (مدرج سيوف، أو حصار قلعة أحمر ضد أزرق).
 - **الثيمات:** Meadow، Desert، Frozen، Candy، Galaxy، Jungle، Ocean، Volcano، Castle، City، Neon، Autumn، Cloud، Crystal، Farm، Ancient.
 - **صور حقيقية:** كل لعبة إلها صورة 3D بتنرسم من خريطتها أول مرة بتظهر وبتنحفظ بالجهاز.
 - تبويب PLAY: صف أفقي لكل نوع (بتسحبه بإصبعك) + بحث + فلترة. كل لعبة: PLAY SOLO / HOST / JOIN / **REMIX IN STUDIO**.
@@ -89,7 +89,7 @@ end)
 - **أحداث:** `on_start` · `on_touch(name, fn(player, part))` (part = القطعة بالضبط اللي انلمست) · `after(sec, fn)` · `every(sec, fn)` · `cancel(id)` · `time()`
 - **القطع:** `world.find(name)` ← `set_color` · `set_visible` · `set_solid` · `move_to` · `move_by` · `position` · `destroy`
 - **اللاعب:** `teleport` · `kill` · `give_coins` · `set_speed` · `set_jump` · `message` · `position` · `player.name`
-- **الواجهة والنقاط:** `ui.message` · `ui.status` · `score.add/set/get`
+- **الواجهة والنقاط:** `ui.message` · `ui.status` · `ui.sound(name)` · `ui.label(id, text)` · `ui.button(id, text, fn(player))` · `score.add/set/get`
 - **الأدوات والصحة:** `player:give_tool("sword")` · `player:damage(n)`
 - **اللاعبين والحفظ:** `on_join(fn(player))` · `on_leave(fn(player))` · `player:set_data(key, v)` · `player:get_data(key)` (بتنحفظ بين الزيارات)
 - **لوحة النقاط والبادجات:** `player:set_stat(name, v)` · `player:add_stat(name, n)` · `player:get_stat(name)` (لحد 3 أعمدة بالزاوية) · `player:award_badge(name)`
@@ -105,7 +105,8 @@ end)
 - **مقاعد وكارتات:** امشي على الكرسي لتقعد، وعالكارت لتسوقه (الجويستك للسواقة، JUMP لتنزل).
 - **الأصدقاء:** بتشوف شو عم يلعبوا، وزر **JOIN** بيدخلك معهم.
 - **رقابة أبوية** بالإعدادات: إيقاف الشات / اللعب أونلاين / النشر / الأصدقاء، مقفولة بـ PIN.
-- تبويب PLAY: **كمّل اللعب** و**المفضّلة** (زر FAVORITE بصفحة كل لعبة).
+- تبويب PLAY: **كمّل اللعب** و**المفضّلة** (زر FAVORITE بصفحة كل لعبة)، و**LIKE / DISLIKE** وعدد اللعب العام (مع حساب أونلاين).
+- **الأفاتار:** 6 وجوه، 6 تسريحات وألوان شعر، غير الألوان والإكسسوارات.
 - قائمة الفروق الكاملة مع روبلوكس وخطة تطويرها: [docs/ROBLOX_GAP.md](docs/ROBLOX_GAP.md).
 
 ## الإشراف (Moderation)

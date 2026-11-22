@@ -31,6 +31,12 @@ const SHIRT_COLORS: Array[Color] = [
 	Color(0.3, 0.8, 0.4), Color(0.65, 0.4, 1.0), Color(1.0, 0.8, 0.2),
 	Color(0.15, 0.17, 0.22), Color(0.95, 0.95, 0.97),
 ]
+const FACES: Array[String] = ["SMILE", "GRIN", "COOL", "WOW", "WINK", "HAPPY"]
+const HAIRS: Array[String] = ["CAP", "SPIKY", "LONG", "BALD", "BUN", "MOHAWK"]
+const HAIR_COLORS: Array[Color] = [
+	Color(0.25, 0.16, 0.1), Color(0.08, 0.07, 0.07), Color(0.85, 0.65, 0.3), Color(0.75, 0.3, 0.15),
+	Color(0.85, 0.85, 0.9), Color(0.35, 0.55, 1.0), Color(1.0, 0.45, 0.7),
+]
 const PANTS_COLORS: Array[Color] = [
 	Color(0.2, 0.27, 0.55), Color(0.15, 0.15, 0.18), Color(0.45, 0.3, 0.2),
 	Color(0.3, 0.5, 0.3), Color(0.75, 0.75, 0.8), Color(0.55, 0.15, 0.2),
@@ -55,6 +61,9 @@ var player_name: String = ""
 var shirt_index: int = 0
 var pants_index: int = 0
 var skin_index: int = 0
+var face_index: int = 0
+var hair_index: int = 0
+var hair_color_index: int = 0
 var server_address: String = "127.0.0.1"
 ## Coins collected across all sessions (saved locally + in the cloud).
 var lifetime_coins: int = 0
@@ -162,6 +171,9 @@ func load_profile() -> void:
 		shirt_index = int(cfg.get_value("profile", "shirt", 0))
 		pants_index = int(cfg.get_value("profile", "pants", 0))
 		skin_index = int(cfg.get_value("profile", "skin", 0))
+		face_index = clampi(int(cfg.get_value("profile", "face", 0)), 0, FACES.size() - 1)
+		hair_index = clampi(int(cfg.get_value("profile", "hair", 0)), 0, HAIRS.size() - 1)
+		hair_color_index = clampi(int(cfg.get_value("profile", "hair_color", 0)), 0, HAIR_COLORS.size() - 1)
 		server_address = str(cfg.get_value("net", "address", "127.0.0.1"))
 		best_times = cfg.get_value("stats", "best_times", {}) as Dictionary
 		lifetime_coins = int(cfg.get_value("stats", "coins", 0))
@@ -218,6 +230,9 @@ func save_profile() -> void:
 	cfg.set_value("profile", "shirt", shirt_index)
 	cfg.set_value("profile", "pants", pants_index)
 	cfg.set_value("profile", "skin", skin_index)
+	cfg.set_value("profile", "face", face_index)
+	cfg.set_value("profile", "hair", hair_index)
+	cfg.set_value("profile", "hair_color", hair_color_index)
 	cfg.set_value("net", "address", server_address)
 	cfg.set_value("stats", "best_times", best_times)
 	cfg.set_value("stats", "coins", lifetime_coins)
@@ -258,6 +273,9 @@ func profile() -> Dictionary:
 		"pants": PANTS_COLORS[pants_index],
 		"skin": SKIN_COLORS[skin_index],
 		"items": equipped_ids(),
+		"face": face_index,
+		"hair": hair_index,
+		"hair_color": HAIR_COLORS[hair_color_index],
 	}
 
 

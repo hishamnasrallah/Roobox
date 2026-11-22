@@ -190,6 +190,7 @@ func _ready() -> void:
 	_build_emote_panel(root)
 	_build_leaderboard(root)
 	_build_tools(root)
+	_build_gui(root)
 	if not Game.tutorial_done and DisplayServer.get_name() != "headless":
 		_build_tutorial(root)
 
@@ -771,3 +772,63 @@ func _tool_key(key: InputEventKey) -> bool:
 		Game.tool_used.emit()
 		return true
 	return false
+
+
+# ------------------------------------------------------- script GUI ---
+## Labels and buttons made by game scripts (ui.label / ui.button).
+
+signal gui_pressed(id: String)
+
+var _gui_box: VBoxContainer
+var _gui_items: Dictionary = {}
+
+
+func _build_gui(root: Control) -> void:
+	_gui_box = VBoxContainer.new()
+	_gui_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
+	_gui_box.offset_left = 24
+	_gui_box.offset_right = 344
+	_gui_box.offset_top = -60
+	_gui_box.offset_bottom = 200
+	_gui_box.add_theme_constant_override("separation", 8)
+	_gui_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_gui_box)
+	touch.blockers.append(_gui_box)
+
+
+func set_gui(id: String, kind: String, text: String) -> void:
+	if id == "":
+		return
+	var old: Control = _gui_items.get(id)
+	if text == "":
+		if old != null:
+			old.queue_free()
+			_gui_items.erase(id)
+		return
+	if old != null and ((kind == "button") != (old is Button)):
+		old.queue_free()
+		old = null
+	if old == null:
+		if kind == "button":
+			var b := UiStyle.button(text, Color(0.3, 0.45, 0.85), 20, 56)
+			b.focus_mode = Control.FOCUS_NONE
+			b.pressed.connect(_gui_press.bind(id))
+			old = b
+		else:
+			var panel := PanelContainer.new()
+			panel.add_theme_stylebox_override("panel", UiStyle.box(Color(0.05, 0.06, 0.12, 0.65), 12, 10))
+			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var l := UiStyle.label(20)
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			panel.add_child(l)
+			old = panel
+		_gui_box.add_child(old)
+		_gui_items[id] = old
+	if old is Button:
+		(old as Button).text = text
+	else:
+		((old as PanelContainer).get_child(0) as Label).text = text
+
+
+func _gui_press(id: String) -> void:
+	gui_pressed.emit(id)

@@ -114,6 +114,18 @@ func _run() -> void:
 	var gone := await b.read_objects([{"collection": "games_index", "key": "badgame", "user_id": a.user_id}])
 	_check(bool(rmg.get("ok", false)) and gone.is_empty(), "moderator removes a community game", [rmg, gone])
 
+	# --- Likes / plays ---
+	var v1 := await a.rpc("game_vote", {"id": "g:obby:meadow", "v": 1})
+	var v2 := await b.rpc("game_vote", {"id": "g:obby:meadow", "v": 1})
+	var v3 := await b.rpc("game_vote", {"id": "g:obby:meadow", "v": -1})
+	await a.rpc("game_play", {"id": "g:obby:meadow"})
+	var gs := await a.rpc("game_stats", {"ids": ["g:obby:meadow", "g:none:none"]})
+	var row: Dictionary = (gs.get("stats", {}) as Dictionary).get("g:obby:meadow", {})
+	_check(int(v1.get("likes", 0)) == 1 and int(v2.get("likes", 0)) == 2 and int(v3.get("likes", 0)) == 1,
+		"likes count once per player (changing a vote moves it)", [v1, v2, v3])
+	_check(int(row.get("likes", 0)) == 1 and int(row.get("dislikes", 0)) == 1 and int(row.get("plays", 0)) == 1
+		and int(row.get("my", 0)) == 1, "game stats (likes, dislikes, plays, my vote)", gs)
+
 	# --- RPC ---
 	var sl := await a.rpc("server_list")
 	_check(sl.has("servers"), "server_list RPC", sl)

@@ -152,6 +152,11 @@ func apply_event(ev: Dictionary) -> void:
 		"score":
 			score = int(ev.get("v", 0))
 			_refresh_status()
+		"snd":
+			Sfx.play(str(ev.get("n", "click")))
+		"gui":
+			if hud != null:
+				hud.set_gui(str(ev.get("id", "")), str(ev.get("k", "label")), str(ev.get("text", "")))
 		"script_error":
 			if hud != null and (Game.testing or Network.mode != "client"):
 				hud.add_chat_line("Script error: %s" % ev.get("msg", ""), Color(1.0, 0.45, 0.45))

@@ -64,6 +64,7 @@ const AR: Dictionary = {
 	"Neon": "النيون", "Autumn": "الخريف", "Cloud": "الغيوم", "Crystal": "الكريستال", "Farm": "المزرعة", "Ancient": "الآثار",
 	"Tycoon": "تايكون", "Floor Fall": "الأرضية الساقطة", "Dropper": "السقوط الحر",
 	"Spinner Survival": "تحدي العصا الدوّارة", "Button Hunt": "صيد الأزرار",
+	"Sword Arena": "ساحة السيوف", "Colosseum": "المدرج", "Castle Siege": "حصار القلعة",
 	"Straight Run": "مسار مستقيم", "Spiral Climb": "تسلّق حلزوني", "Spiral Tower": "برج حلزوني",
 	"Tower of Floors": "برج الطوابق", "Obstacle Run": "سباق العوائق", "Rooftops": "أسطح المباني",
 	"Walled Maze": "متاهة بجدران", "Sky Maze": "متاهة السما", "Lava Spiral": "حلزون اللافا",

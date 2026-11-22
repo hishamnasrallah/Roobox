@@ -23,8 +23,8 @@ func _positions(lvl: Dictionary) -> Dictionary:
 
 func _ready() -> void:
 	var games := GameLibrary.all()
-	_check(games.size() == GameLibrary.count() and games.size() >= 280, "at least 280 games", games.size())
-	_check(GameLibrary.GENRES.size() >= 18, "at least 18 game types", GameLibrary.GENRES.size())
+	_check(games.size() == GameLibrary.count() and games.size() >= 300, "at least 300 games", games.size())
+	_check(GameLibrary.GENRES.size() >= 19, "at least 19 game types", GameLibrary.GENRES.size())
 	# The two layouts of every game type must really be different maps.
 	for g: Dictionary in GameLibrary.GENRES:
 		var la := GameLibrary.generate("g:%s:%s" % [g["id"], GameLibrary.THEMES[0]["id"]])

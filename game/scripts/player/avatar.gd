@@ -13,6 +13,9 @@ const HIP_HEIGHT := 0.85
 
 ## Equipped shop item ids (see AvatarItems).
 var items: Array = []
+var face: int = 0
+var hair: int = 0
+var hair_color: Color = Color(0.25, 0.16, 0.1)
 
 var _body: Node3D        # lean + squash root (at feet)
 var _hips: Node3D        # bobbing
@@ -56,6 +59,10 @@ func apply_profile(info: Dictionary) -> void:
 		skin_color = info["skin"]
 	if info.get("items") is Array:
 		items = (info["items"] as Array).duplicate()
+	face = int(info.get("face", 0))
+	hair = int(info.get("hair", 0))
+	if info.get("hair_color") is Color:
+		hair_color = info["hair_color"]
 
 
 func _build() -> void:
@@ -96,14 +103,75 @@ func _build() -> void:
 	_head.position = Vector3(0, 0.8, 0)
 	_torso.add_child(_head)
 	_box(_head, Vector3(0, 0.3, 0), Vector3(0.58, 0.56, 0.56), skin)
-	_box(_head, Vector3(-0.13, 0.36, -0.285), Vector3(0.09, 0.14, 0.02), dark)
-	_box(_head, Vector3(0.13, 0.36, -0.285), Vector3(0.09, 0.14, 0.02), dark)
-	_box(_head, Vector3(0, 0.2, -0.285), Vector3(0.2, 0.05, 0.02), dark)
-	# Hair cap.
-	_box(_head, Vector3(0, 0.6, 0.03), Vector3(0.62, 0.1, 0.6), _mat(Color(0.25, 0.16, 0.1)))
+	_build_face(dark)
+	_build_hair(_mat(hair_color))
 
 	for id in items:
 		AvatarItems.build(str(id), _head, _torso)
+
+
+## Faces (Game.FACES): eyes + mouth drawn with small boxes on the front (-Z).
+func _build_face(dark: Material) -> void:
+	var z := -0.285
+	var white := _mat(Color(0.97, 0.97, 1.0))
+	match face:
+		1:  # grin
+			_box(_head, Vector3(-0.13, 0.37, z), Vector3(0.09, 0.12, 0.02), dark)
+			_box(_head, Vector3(0.13, 0.37, z), Vector3(0.09, 0.12, 0.02), dark)
+			_box(_head, Vector3(0, 0.18, z), Vector3(0.3, 0.1, 0.02), dark)
+			_box(_head, Vector3(0, 0.2, z - 0.005), Vector3(0.24, 0.04, 0.02), white)
+		2:  # cool (sunglasses)
+			_box(_head, Vector3(0, 0.37, z - 0.01), Vector3(0.46, 0.06, 0.03), dark)
+			_box(_head, Vector3(-0.12, 0.34, z - 0.01), Vector3(0.17, 0.11, 0.03), dark)
+			_box(_head, Vector3(0.12, 0.34, z - 0.01), Vector3(0.17, 0.11, 0.03), dark)
+			_box(_head, Vector3(0.03, 0.19, z), Vector3(0.16, 0.04, 0.02), dark)
+		3:  # wow
+			_box(_head, Vector3(-0.13, 0.36, z), Vector3(0.11, 0.11, 0.02), dark)
+			_box(_head, Vector3(0.13, 0.36, z), Vector3(0.11, 0.11, 0.02), dark)
+			_box(_head, Vector3(0, 0.17, z), Vector3(0.09, 0.1, 0.02), dark)
+		4:  # wink
+			_box(_head, Vector3(-0.13, 0.36, z), Vector3(0.09, 0.14, 0.02), dark)
+			_box(_head, Vector3(0.13, 0.34, z), Vector3(0.12, 0.03, 0.02), dark)
+			_smile(z, dark)
+		5:  # happy (^ ^)
+			_box(_head, Vector3(-0.13, 0.35, z), Vector3(0.12, 0.03, 0.02), dark)
+			_box(_head, Vector3(0.13, 0.35, z), Vector3(0.12, 0.03, 0.02), dark)
+			_box(_head, Vector3(0, 0.19, z), Vector3(0.26, 0.09, 0.02), dark)
+			_box(_head, Vector3(0, 0.17, z - 0.005), Vector3(0.14, 0.04, 0.02), _mat(Color(1.0, 0.45, 0.45)))
+		_:  # smile
+			_box(_head, Vector3(-0.13, 0.36, z), Vector3(0.09, 0.14, 0.02), dark)
+			_box(_head, Vector3(0.13, 0.36, z), Vector3(0.09, 0.14, 0.02), dark)
+			_smile(z, dark)
+
+
+func _smile(z: float, dark: Material) -> void:
+	_box(_head, Vector3(0, 0.18, z), Vector3(0.16, 0.04, 0.02), dark)
+	_box(_head, Vector3(-0.1, 0.205, z), Vector3(0.05, 0.05, 0.02), dark)
+	_box(_head, Vector3(0.1, 0.205, z), Vector3(0.05, 0.05, 0.02), dark)
+
+
+## Hair styles (Game.HAIRS).
+func _build_hair(m: Material) -> void:
+	match hair:
+		1:  # spiky
+			_box(_head, Vector3(0, 0.6, 0.03), Vector3(0.62, 0.1, 0.6), m)
+			for i in 4:
+				var spike := _box(_head, Vector3(-0.21 + i * 0.14, 0.7, 0.05), Vector3(0.12, 0.16, 0.12), m)
+				spike.rotation.z = 0.6 if i % 2 == 0 else -0.6
+		2:  # long
+			_box(_head, Vector3(0, 0.6, 0.03), Vector3(0.64, 0.12, 0.62), m)
+			_box(_head, Vector3(0, 0.2, 0.3), Vector3(0.64, 0.8, 0.1), m)
+			_box(_head, Vector3(-0.31, 0.3, 0.1), Vector3(0.06, 0.6, 0.42), m)
+			_box(_head, Vector3(0.31, 0.3, 0.1), Vector3(0.06, 0.6, 0.42), m)
+		3:  # bald
+			pass
+		4:  # bun
+			_box(_head, Vector3(0, 0.6, 0.03), Vector3(0.62, 0.1, 0.6), m)
+			_box(_head, Vector3(0, 0.72, 0.18), Vector3(0.24, 0.2, 0.24), m)
+		5:  # mohawk
+			_box(_head, Vector3(0, 0.68, 0.05), Vector3(0.12, 0.26, 0.56), m)
+		_:  # cap
+			_box(_head, Vector3(0, 0.6, 0.03), Vector3(0.62, 0.1, 0.6), m)
 
 
 func _limb(parent: Node3D, pivot: Vector3, size: Vector3, mat: Material) -> Node3D:

@@ -14,7 +14,9 @@ extends GameMode
 ##   player:teleport(x,y,z) player:kill() player:give_coins(n)
 ##       player:set_speed(v) player:set_jump(v) player:message(text)
 ##       player:position()                   (player.name, player.id)
-##   ui.message(text[, sec])  ui.status(text)
+##   ui.message(text[, sec])  ui.status(text)  ui.sound(name)
+##   ui.label(id, text)  ui.button(id, text, fn(player))   (on-screen GUI;
+##       empty text removes it)
 ##   score.add(n) score.set(n) score.get()
 
 signal log_line(text: String)
@@ -46,6 +48,7 @@ var _stats: Dictionary = {}
 ## Saved player data (from each player's device): peer_id -> {key: value}
 var _pdata: Dictionary = {}
 var _join: Array = []
+var _gui: Dictionary = {}
 var _leave: Array = []
 
 
@@ -131,7 +134,8 @@ func _install_api() -> void:
 	vm.set_global("cancel", _api_cancel)
 	vm.set_global("time", func(_a: Array) -> Array: return [_time])
 	vm.set_global("world", vm.make_table({"find": _api_find}))
-	vm.set_global("ui", vm.make_table({"message": _api_message, "status": _api_status}))
+	vm.set_global("ui", vm.make_table({"message": _api_message, "status": _api_status,
+		"sound": _api_sound, "label": _api_label, "button": _api_button}))
 	vm.set_global("score", vm.make_table({"add": _score_add, "set": _score_set, "get": _score_get}))
 
 
@@ -224,6 +228,55 @@ func _api_message(a: Array) -> Array:
 	emit_event({"t": "msg", "text": RooScript.to_str(a[0] if a.size() > 0 else ""),
 		"sec": RooScript._num(a, 1) if a.size() > 1 else 2.0})
 	return []
+
+
+const SOUNDS := ["coin", "checkpoint", "win", "join", "die", "boing", "hit", "click", "pop", "teleport", "jump", "land"]
+
+
+func _api_sound(a: Array) -> Array:
+	var n := RooScript.to_str(a[0] if a.size() > 0 else "")
+	if n in SOUNDS:
+		emit_event({"t": "snd", "n": n})
+	return []
+
+
+func _gui_event(id: String, kind: String, text: String) -> void:
+	var ev := {"t": "gui", "id": id, "k": kind, "text": text}
+	if text == "":
+		_ops.erase("gui|" + id)
+	else:
+		_ops["gui|" + id] = ev
+	emit_event(ev)
+
+
+func _api_label(a: Array) -> Array:
+	var id := RooScript.to_str(a[0] if a.size() > 0 else "").substr(0, 24)
+	if id == "":
+		return []
+	_gui_event(id, "label", RooScript.to_str(a[1] if a.size() > 1 else "").substr(0, 80))
+	return []
+
+
+func _api_button(a: Array) -> Array:
+	var id := RooScript.to_str(a[0] if a.size() > 0 else "").substr(0, 24)
+	if id == "":
+		return []
+	var text := RooScript.to_str(a[1] if a.size() > 1 else "").substr(0, 32)
+	if text == "":
+		_gui.erase(id)
+	elif _gui.size() < 8 or _gui.has(id):
+		_gui[id] = a[2] if a.size() > 2 else null
+	else:
+		vm._fail("at most 8 buttons")
+		return []
+	_gui_event(id, "button", text)
+	return []
+
+
+## A player pressed a script button.
+func fire_gui(id: String, peer_id: int) -> void:
+	if vm != null and _gui.has(id) and _gui[id] != null:
+		_invoke(_gui[id], [_player_ref(peer_id)])
 
 
 func _api_status(a: Array) -> Array:

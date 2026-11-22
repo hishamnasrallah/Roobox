@@ -365,6 +365,9 @@ func _sanitize(info: Dictionary) -> Dictionary:
 		"pants": _color(info.get("pants"), Game.PANTS_COLORS[0]),
 		"skin": _color(info.get("skin"), Game.SKIN_COLORS[0]),
 		"items": _items(info.get("items")),
+		"face": clampi(int(info.get("face", 0)), 0, Game.FACES.size() - 1),
+		"hair": clampi(int(info.get("hair", 0)), 0, Game.HAIRS.size() - 1),
+		"hair_color": _color(info.get("hair_color"), Game.HAIR_COLORS[0]),
 	}
 
 
