@@ -43,6 +43,9 @@ func _ready() -> void:
 	if args.has("--scripttest"):
 		add_child(load("res://scripts/debug/script_test.gd").new())
 		return
+	if args.has("--uitest"):
+		add_child(load("res://scripts/debug/ui_test.gd").new())
+		return
 	if args.has("--shoptest"):
 		add_child(load("res://scripts/debug/shop_test.gd").new())
 		return
@@ -598,6 +601,8 @@ func _on_back_pressed() -> void:
 		Game.restart()
 	elif _in_game:
 		_back_to_menu()
+	elif menu != null and menu.go_back():
+		return
 	else:
 		Game.save_profile()
 		get_tree().quit()

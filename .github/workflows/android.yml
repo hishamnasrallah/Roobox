@@ -83,6 +83,12 @@ jobs:
           if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" library.log; then exit 1; fi
           grep -q "LIBRARYTEST PASS" library.log
 
+      - name: Menu test (touch scrolling, opening a game, back)
+        run: |
+          godot --headless --path game -- --uitest 2>&1 | grep -vE "fontconfig|os_linuxbsd" | tee ui.log
+          if grep -nE "SCRIPT ERROR|Invalid (call|access|assignment)" ui.log; then exit 1; fi
+          grep -q "UITEST PASS" ui.log
+
       - name: Shop test (coins, buy, wear, daily reward)
         run: |
           godot --headless --path game -- --shoptest 2>&1 | grep -vE "fontconfig|os_linuxbsd" | tee shop.log

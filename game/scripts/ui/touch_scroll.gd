@@ -14,7 +14,10 @@ extends Node
 ## Sliders and text editors keep their own drag behaviour.
 
 const THRESHOLD := 12.0
-const FRICTION := 0.04   # velocity left after one second of gliding
+const FRICTION := 0.06   # velocity left after one second of gliding
+const MAX_SPEED := 6000.0
+## Our own fake "pointer moved away" events live far off screen.
+const FAR := -10000.0
 
 static var _manager: TouchScroll = null
 static var _scrolls: Array = []
@@ -35,6 +38,8 @@ var _coast: ScrollContainer = null
 static func attach(sc: ScrollContainer) -> ScrollContainer:
 	if not _scrolls.has(sc):
 		_scrolls.append(sc)
+	# Turn off Godot's own touch dragging so the two never fight.
+	sc.scroll_deadzone = 100000
 	if _manager == null or not is_instance_valid(_manager):
 		_manager = TouchScroll.new()
 		_manager.name = "TouchScroll"
@@ -61,6 +66,9 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	var me := event as InputEventMouse
+	if me != null and me.position.x <= FAR * 0.5:
+		return  # our own cancel/release event
 	var mb := event as InputEventMouseButton
 	if mb != null:
 		if mb.button_index != MOUSE_BUTTON_LEFT:
@@ -122,7 +130,7 @@ func _on_motion(mm: InputEventMouseMotion) -> void:
 		_cancel_buttons()
 	get_viewport().set_input_as_handled()
 	_scroll_by(_active, -d)
-	_vel = _vel.lerp(-d / dt, 0.35)
+	_vel = _vel.lerp((-d / dt).limit_length(MAX_SPEED), 0.35)
 
 
 func _on_release(mb: InputEventMouseButton) -> void:
@@ -133,7 +141,7 @@ func _on_release(mb: InputEventMouseButton) -> void:
 		return
 	get_viewport().set_input_as_handled()
 	var rel := mb.duplicate() as InputEventMouseButton
-	rel.position = Vector2(-10000, -10000)
+	rel.position = Vector2(FAR, FAR)
 	rel.global_position = rel.position
 	_push.call_deferred(rel)
 	if Time.get_ticks_msec() - _last_ms < 90:
@@ -159,7 +167,7 @@ func _process(delta: float) -> void:
 ## Moves the button under the finger "away" so it does not fire on release.
 func _cancel_buttons() -> void:
 	var mv := InputEventMouseMotion.new()
-	mv.position = Vector2(-10000, -10000)
+	mv.position = Vector2(FAR, FAR)
 	mv.global_position = mv.position
 	mv.button_mask = MOUSE_BUTTON_MASK_LEFT
 	_push.call_deferred(mv)
@@ -169,6 +177,11 @@ func _push(ev: InputEvent) -> void:
 	var vp := get_viewport()
 	if vp != null:
 		vp.push_input(ev)
+
+
+## Is a drag in progress (tests / other code)?
+func dragging() -> bool:
+	return _active != null
 
 
 func _scroll_by(sc: ScrollContainer, d: Vector2) -> void:

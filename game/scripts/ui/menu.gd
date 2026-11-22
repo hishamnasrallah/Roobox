@@ -23,6 +23,11 @@ var _chips: Dictionary = {}
 var _lib_more: Button
 var _lib_count: Label
 var _scroll: ScrollContainer
+var _jump_bar: HBoxContainer
+var _anchors: Dictionary = {}
+## Scroll position of the game list before opening a game page (for BACK).
+var _return_scroll: int = -1
+var _in_detail: bool = false
 
 
 func _ready() -> void:
@@ -82,6 +87,17 @@ func _ready() -> void:
 		b.pressed.connect(func() -> void: open_tab(tab_name))
 		tabs.add_child(b)
 		_tab_buttons[t] = b
+
+	# Quick jumps inside the long PLAY page.
+	_jump_bar = HBoxContainer.new()
+	_jump_bar.add_theme_constant_override("separation", 8)
+	vb.add_child(_jump_bar)
+	for spec in [["TOP", "top"], ["ALL GAMES", "games"], ["COMMUNITY", "community"]]:
+		var jb := UiStyle.button(str(spec[0]), Color(0.2, 0.24, 0.38), 15, 42)
+		jb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		jb.focus_mode = Control.FOCUS_NONE
+		jb.pressed.connect(jump_to.bind(str(spec[1])))
+		_jump_bar.add_child(jb)
 
 	# Content area.
 	var panel := PanelContainer.new()
@@ -144,6 +160,10 @@ func _age_chosen(group: String, overlay: Control) -> void:
 
 func open_tab(t: String) -> void:
 	_tab = t
+	_in_detail = false
+	_anchors.clear()
+	if _jump_bar != null:
+		_jump_bar.visible = t == "PLAY"
 	for k: String in _tab_buttons:
 		var btn: Button = _tab_buttons[k]
 		var c := Color(0.95, 0.55, 0.2) if k == t else Color(0.25, 0.3, 0.48)
@@ -167,6 +187,57 @@ func open_tab(t: String) -> void:
 			_build_records()
 		"SETTINGS":
 			_build_settings()
+
+
+# ---------------------------------------------------------- navigation ---
+
+func _enter_detail() -> void:
+	if not _in_detail and _scroll != null and _tab == "PLAY":
+		_return_scroll = _scroll.scroll_vertical
+	_in_detail = true
+	if _jump_bar != null:
+		_jump_bar.visible = false
+	if _scroll != null:
+		_scroll.scroll_vertical = 0
+
+
+## BACK from a game page: the list comes back where you left it.
+func back_to_list() -> void:
+	var pos := _return_scroll
+	open_tab("PLAY")
+	if pos > 0:
+		await get_tree().process_frame
+		await get_tree().process_frame
+		if is_instance_valid(_scroll):
+			_scroll.scroll_vertical = pos
+	_return_scroll = -1
+
+
+## Scrolls the PLAY page to a section: "top", "games", "community".
+func jump_to(section: String) -> void:
+	if _scroll == null:
+		return
+	if _in_detail:
+		await back_to_list()
+	if section == "top" or not _anchors.has(section) or not is_instance_valid(_anchors[section]):
+		_scroll.scroll_vertical = 0
+		return
+	var node: Control = _anchors[section]
+	_scroll.scroll_vertical = int(node.get_global_rect().position.y - _content.get_global_rect().position.y)
+
+
+## Android back button. Returns false when there is nothing to go back to.
+func go_back() -> bool:
+	if _in_detail:
+		back_to_list()
+		return true
+	if _tab != "PLAY":
+		open_tab("PLAY")
+		return true
+	if _scroll != null and _scroll.scroll_vertical > 0:
+		_scroll.scroll_vertical = 0
+		return true
+	return false
 
 
 func _refresh_account() -> void:
@@ -253,7 +324,7 @@ func _build_discover() -> void:
 		if not e.get("hidden", false):
 			grid.add_child(_card(e))
 	_build_library()
-	_text(_content, "Community games", 34, Color(1.0, 0.85, 0.3))
+	_anchors["community"] = _text(_content, "Community games", 34, Color(1.0, 0.85, 0.3))
 	if Game.parental_on("no_online"):
 		_text(_content, "Community games are turned off in parental controls.", 20, Color(1, 1, 1, 0.6))
 		return
@@ -273,6 +344,7 @@ func _build_library() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 10)
 	_content.add_child(head)
+	_anchors["games"] = head
 	var t := _text(head, "Game library", 34, Color(1.0, 0.85, 0.3))
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lib_count = _text(head, "", 18, Color(1, 1, 1, 0.7))
@@ -439,6 +511,7 @@ func _set_texture(tex: Texture2D, target: TextureRect) -> void:
 
 func _show_library_detail(game_id: String) -> void:
 	Sfx.play("click")
+	_enter_detail()
 	for ch in _content.get_children():
 		ch.queue_free()
 	_busy_buttons.clear()
@@ -449,7 +522,7 @@ func _show_library_detail(game_id: String) -> void:
 	var back := UiStyle.button("< ALL GAMES", Color(0.3, 0.33, 0.45), 18, 46)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	back.custom_minimum_size.x = 200
-	back.pressed.connect(open_tab.bind("PLAY"))
+	back.pressed.connect(back_to_list)
 	_content.add_child(back)
 	_hero("lib_" + game_id, _library_level.bind(game_id), col)
 	_text(_content, e["title"], 40, col.lightened(0.35))
@@ -745,6 +818,7 @@ func _card(e: Dictionary) -> Control:
 
 func _show_detail(exp_id: String) -> void:
 	Sfx.play("click")
+	_enter_detail()
 	for ch in _content.get_children():
 		ch.queue_free()
 	_busy_buttons.clear()
@@ -753,7 +827,7 @@ func _show_detail(exp_id: String) -> void:
 	var back := UiStyle.button("< ALL GAMES", Color(0.3, 0.33, 0.45), 18, 46)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	back.custom_minimum_size.x = 200
-	back.pressed.connect(func() -> void: open_tab("PLAY"))
+	back.pressed.connect(back_to_list)
 	_content.add_child(back)
 	_text(_content, e["title"], 44, col.lightened(0.35))
 	_text(_content, e["desc"], 22, Color(1, 1, 1, 0.9))
