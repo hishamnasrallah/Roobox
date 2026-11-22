@@ -329,6 +329,7 @@ func give_gear(kind: String) -> void:
 func _on_backpack() -> void:
 	if avatar != null:
 		avatar.set_tool(Game.held_tool_id())
+	_update_tool_effects(0.0)
 
 
 func _update_tool_effects(delta: float) -> void:
