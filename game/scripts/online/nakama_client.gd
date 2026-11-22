@@ -1,7 +1,7 @@
 class_name NakamaClient
 extends RefCounted
 ## Minimal REST client for a Nakama server (https://heroiclabs.com/nakama).
-## Covers what Roobox needs: device auth, account, storage, friends,
+## Covers what Plazo needs: device auth, account, storage, friends,
 ## leaderboards and RPCs. Every call is a coroutine: `await client.x()`.
 ## Results are dictionaries: {ok: bool, code: int, data: Dictionary, error: String}
 

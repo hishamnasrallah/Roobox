@@ -55,7 +55,7 @@ func _ready() -> void:
 	head.add_theme_constant_override("separation", 16)
 	vb.add_child(head)
 	var title := UiStyle.label(56, Color(1.0, 0.85, 0.25))
-	title.text = "ROOBOX"
+	title.text = "PLAZO"
 	head.add_child(title)
 	_account_label = UiStyle.label(18, Color(0.75, 0.9, 1.0))
 	_account_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -118,7 +118,7 @@ func _ask_age(root: Control) -> void:
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
 	panel.add_child(vb)
-	_text(vb, "Welcome to Roobox!", 34, Color(1.0, 0.85, 0.3))
+	_text(vb, "Welcome to Plazo!", 34, Color(1.0, 0.85, 0.3))
 	_text(vb, "How old are you? This keeps the game safe for younger players.", 20)
 	for spec in [["UNDER 13", "under13", Color(0.25, 0.5, 0.95)], ["13 OR OLDER", "13plus", Color(0.2, 0.72, 0.35)]]:
 		var b := UiStyle.button(spec[0], spec[2], 26, 64)
@@ -645,7 +645,7 @@ func _play_community(item: Dictionary, mode: String) -> void:
 # -------------------------------------------------------------- create ---
 
 func _build_create() -> void:
-	_text(_content, "Roobox Studio", 34, Color(1.0, 0.85, 0.3))
+	_text(_content, "Plazo Studio", 34, Color(1.0, 0.85, 0.3))
 	_text(_content, "Build your own game with blocks, ramps, lava, jump pads, coins and a finish line. Test it, then publish it for everyone.", 20, Color(1, 1, 1, 0.85))
 	var new_btn := UiStyle.button("+ NEW GAME", Color(0.2, 0.72, 0.35))
 	new_btn.pressed.connect(func() -> void: studio_requested.emit(""))
@@ -1041,6 +1041,43 @@ func _refresh_swatches(key: String) -> void:
 var _parental_unlocked: bool = false
 
 
+func _build_privacy(c: Control) -> void:
+	_text(c, "Privacy", 24, Color(1.0, 0.85, 0.3))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	c.add_child(row)
+	var pb := UiStyle.button("PRIVACY POLICY", Color(0.3, 0.36, 0.55), 18, 54)
+	pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pb.pressed.connect(_open_privacy)
+	row.add_child(pb)
+	if Backend.online:
+		var db := UiStyle.button("DELETE MY ACCOUNT", Color(0.6, 0.2, 0.2), 18, 54)
+		db.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(db)
+		var confirm := UiStyle.line_edit("type DELETE to confirm", 20)
+		confirm.visible = false
+		c.add_child(confirm)
+		db.pressed.connect(_delete_account.bind(confirm))
+	_text(c, "Questions or data requests: privacy@plazo.cloud", 16, Color(1, 1, 1, 0.6))
+
+
+func _open_privacy() -> void:
+	OS.shell_open("https://plazo.cloud/privacy")
+
+
+func _delete_account(confirm: LineEdit) -> void:
+	if not confirm.visible:
+		confirm.visible = true
+		show_status(tr("This deletes your online account, friends, progress and published games. Type DELETE and press the button again."), true)
+		return
+	if confirm.text.strip_edges().to_upper() != "DELETE":
+		show_status(tr("Type DELETE to confirm."), true)
+		return
+	var ok: bool = await Backend.delete_account()
+	show_status(tr("Your account was deleted.") if ok else tr("Could not delete the account - try again."), not ok)
+	open_tab("SETTINGS")
+
+
 func _build_blocked(c: Control) -> void:
 	if Game.blocked.is_empty():
 		return
@@ -1393,6 +1430,7 @@ func _build_settings() -> void:
 
 	_build_parental(c)
 	_build_blocked(c)
+	_build_privacy(c)
 	if Backend.online and Backend.is_admin:
 		_build_admin(c)
 		_build_moderation(c)

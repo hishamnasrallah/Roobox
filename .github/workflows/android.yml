@@ -121,29 +121,29 @@ jobs:
       - name: Export debug APK
         run: |
           mkdir -p build/android
-          godot --headless --path game --export-debug "Android" "$GITHUB_WORKSPACE/build/android/roobox-debug.apk"
+          godot --headless --path game --export-debug "Android" "$GITHUB_WORKSPACE/build/android/plazo-debug.apk"
           ls -la build/android
-          test -s build/android/roobox-debug.apk
+          test -s build/android/plazo-debug.apk
 
       - name: Export dedicated server (Linux)
         run: |
           mkdir -p build/server
-          godot --headless --path game --export-release "Linux Server" "$GITHUB_WORKSPACE/build/server/roobox_server.x86_64"
+          godot --headless --path game --export-release "Linux Server" "$GITHUB_WORKSPACE/build/server/plazo_server.x86_64"
           ls -la build/server
-          test -s build/server/roobox_server.x86_64
+          test -s build/server/plazo_server.x86_64
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: roobox-android-debug
-          path: build/android/roobox-debug.apk
+          name: plazo-android-debug
+          path: build/android/plazo-debug.apk
           if-no-files-found: error
 
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
-          name: roobox-server-linux
-          path: build/server/roobox_server.x86_64
+          name: plazo-server-linux
+          path: build/server/plazo_server.x86_64
           if-no-files-found: error
 
   backend:
@@ -209,10 +209,10 @@ jobs:
             echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
             echo "Using the real release keystore"
           else
-            keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9999 -alias roobox_ci \
+            keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9999 -alias plazo_ci \
               -keystore "$RUNNER_TEMP/release.keystore" -storepass ci-pass-123 -keypass ci-pass-123 \
-              -dname "CN=Roobox CI, O=Roobox, C=US"
-            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=roobox_ci" >> "$GITHUB_ENV"
+              -dname "CN=Plazo CI, O=Plazo, C=US"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=plazo_ci" >> "$GITHUB_ENV"
             echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=ci-pass-123" >> "$GITHUB_ENV"
             echo "::notice::No RELEASE_KEYSTORE_BASE64 secret - built with a throwaway key (NOT for Google Play)"
           fi
@@ -226,16 +226,16 @@ jobs:
           mkdir -p build/release
           export GRADLE_OPTS="-Dorg.gradle.daemon=false"
           timeout 1200 godot --headless --verbose --path game --install-android-build-template \
-            --export-release "Android Release" "$GITHUB_WORKSPACE/build/release/roobox.aab" 2>&1 \
+            --export-release "Android Release" "$GITHUB_WORKSPACE/build/release/plazo.aab" 2>&1 \
             | grep -vE "fontconfig|os_linuxbsd" | tee release.log
           ls -la build/release
-          test -s build/release/roobox.aab
+          test -s build/release/plazo.aab
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: roobox-release-aab
-          path: build/release/roobox.aab
+          name: plazo-release-aab
+          path: build/release/plazo.aab
           if-no-files-found: error
 
   publish:
@@ -252,13 +252,13 @@ jobs:
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
-          name: roobox-android-debug
+          name: plazo-android-debug
           path: apk
 
       - name: Download server
         uses: actions/download-artifact@v4
         with:
-          name: roobox-server-linux
+          name: plazo-server-linux
           path: server
 
       - name: Replace dev-latest release
@@ -267,11 +267,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete dev-latest --cleanup-tag -y || true
-          gh release create dev-latest apk/roobox-debug.apk server/roobox_server.x86_64 \
+          gh release create dev-latest apk/plazo-debug.apk server/plazo_server.x86_64 \
             --prerelease \
             --target "${{ github.sha }}" \
-            --title "Roobox dev build #${{ github.run_number }}" \
-            --notes "Debug APK from branch \`${{ github.ref_name }}\` (commit ${{ github.sha }}). Install on Android: download, open, allow 'Install unknown apps'. Dedicated server: roobox_server.x86_64 (Linux x86_64, UDP 7777)."
+            --title "Plazo dev build #${{ github.run_number }}" \
+            --notes "Debug APK from branch \`${{ github.ref_name }}\` (commit ${{ github.sha }}). Install on Android: download, open, allow 'Install unknown apps'. Dedicated server: plazo_server.x86_64 (Linux x86_64, UDP 7777)."
 
   server-image:
     name: Publish server Docker image (ghcr.io)
@@ -288,14 +288,14 @@ jobs:
       - name: Download server
         uses: actions/download-artifact@v4
         with:
-          name: roobox-server-linux
+          name: plazo-server-linux
           path: server
 
       - name: Build and push image
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          IMAGE=ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')-server
+          IMAGE=ghcr.io/$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')/plazo-server
           echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker build -t "$IMAGE:latest" -t "$IMAGE:${{ github.sha }}" server
           docker push "$IMAGE:latest"

@@ -267,6 +267,10 @@ func save_profile() -> void:
 	cfg.save(PROFILE_PATH)
 
 
+func new_device_id() -> String:
+	return _new_device_id()
+
+
 func _new_device_id() -> String:
 	var crypto := Crypto.new()
 	return "roobox-" + crypto.generate_random_bytes(16).hex_encode()

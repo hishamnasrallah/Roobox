@@ -1,5 +1,5 @@
-# Roobox backend: Nakama (accounts, friends, storage, leaderboards) + Postgres
-# + the Roobox dedicated game server.
+# Plazo backend: Nakama (accounts, friends, storage, leaderboards) + Postgres
+# + the Plazo dedicated game server.
 #
 #   cp .env.example .env    # then edit the passwords!
 #   docker compose --profile game up -d
@@ -7,7 +7,7 @@
 # Ports: 7350/tcp (Nakama API, used by the app), 7777-7780/udp (one game server per game).
 # The Nakama admin console (7351) is bound to localhost only; reach it with
 # an SSH tunnel:  ssh -L 7351:127.0.0.1:7351 user@your-server
-name: roobox
+name: plazo
 
 services:
   postgres:
@@ -33,7 +33,7 @@ services:
     entrypoint: /bin/sh -ecx
     command: >-
       "/nakama/nakama migrate up --database.address postgres:${POSTGRES_PASSWORD:-localdb}@postgres:5432/nakama &&
-      exec /nakama/nakama --name roobox1
+      exec /nakama/nakama --name plazo1
       --database.address postgres:${POSTGRES_PASSWORD:-localdb}@postgres:5432/nakama
       --runtime.path /nakama/data/modules
       --runtime.env GAME_SERVERS=${GAME_SERVERS:-island=:7777,lava_rising=:7778,color_drop=:7779,obby_rush=:7780}
@@ -59,46 +59,46 @@ services:
 
   # One dedicated server per game (experience). Start with: --profile game
   game-island:
-    image: ghcr.io/hishamnasrallah/roobox-server:latest
+    image: ghcr.io/hishamnasrallah/plazo-server:latest
     profiles: ["game"]
     restart: unless-stopped
     environment:
-      ROOBOX_JOIN_SECRET: ${JOIN_SECRET:-}
-      ROOBOX_BACKEND_URL: http://nakama:7350
-      ROOBOX_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
+      PLAZO_JOIN_SECRET: ${JOIN_SECRET:-}
+      PLAZO_BACKEND_URL: http://nakama:7350
+      PLAZO_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
     command: ["--port", "7777", "--experience", "island"]
     ports: ["7777:7777/udp"]
 
   game-lava:
-    image: ghcr.io/hishamnasrallah/roobox-server:latest
+    image: ghcr.io/hishamnasrallah/plazo-server:latest
     profiles: ["game"]
     restart: unless-stopped
     environment:
-      ROOBOX_JOIN_SECRET: ${JOIN_SECRET:-}
-      ROOBOX_BACKEND_URL: http://nakama:7350
-      ROOBOX_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
+      PLAZO_JOIN_SECRET: ${JOIN_SECRET:-}
+      PLAZO_BACKEND_URL: http://nakama:7350
+      PLAZO_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
     command: ["--port", "7778", "--experience", "lava_rising"]
     ports: ["7778:7778/udp"]
 
   game-color:
-    image: ghcr.io/hishamnasrallah/roobox-server:latest
+    image: ghcr.io/hishamnasrallah/plazo-server:latest
     profiles: ["game"]
     restart: unless-stopped
     environment:
-      ROOBOX_JOIN_SECRET: ${JOIN_SECRET:-}
-      ROOBOX_BACKEND_URL: http://nakama:7350
-      ROOBOX_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
+      PLAZO_JOIN_SECRET: ${JOIN_SECRET:-}
+      PLAZO_BACKEND_URL: http://nakama:7350
+      PLAZO_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
     command: ["--port", "7779", "--experience", "color_drop"]
     ports: ["7779:7779/udp"]
 
   game-rush:
-    image: ghcr.io/hishamnasrallah/roobox-server:latest
+    image: ghcr.io/hishamnasrallah/plazo-server:latest
     profiles: ["game"]
     restart: unless-stopped
     environment:
-      ROOBOX_JOIN_SECRET: ${JOIN_SECRET:-}
-      ROOBOX_BACKEND_URL: http://nakama:7350
-      ROOBOX_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
+      PLAZO_JOIN_SECRET: ${JOIN_SECRET:-}
+      PLAZO_BACKEND_URL: http://nakama:7350
+      PLAZO_HTTP_KEY: ${NAKAMA_HTTP_KEY:-defaulthttpkey}
     command: ["--port", "7780", "--experience", "obby_rush"]
     ports: ["7780:7780/udp"]
 

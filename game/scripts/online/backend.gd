@@ -342,6 +342,22 @@ func count_play(id: String) -> void:
 var is_admin: bool = false
 
 
+## Deletes the online account and all its data, then signs out and starts
+## a fresh guest identity on this device.
+func delete_account() -> bool:
+	if not online:
+		return false
+	var r := await client.rpc("delete_my_account")
+	if not bool(r.get("ok", false)):
+		return false
+	Game.device_id = Game.new_device_id()
+	Game.badges = {}
+	Game.favorites = []
+	Game.save_profile()
+	disconnect_backend()
+	return true
+
+
 ## Signed pass for joining protected game servers ("" if not needed/offline).
 func join_ticket() -> String:
 	if not online:

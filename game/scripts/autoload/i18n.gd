@@ -25,7 +25,7 @@ const AR: Dictionary = {
 	"WEARING": "لابسها", "OWNED - tap to wear": "عندك - اضغط لتلبسها", "%d coins": "%d عملة",
 	"You bought %s!": "اشتريت %s!", "Daily reward: +%d coins!": "المكافأة اليومية: +%d عملة!",
 	# Create
-	"Roobox Studio": "استوديو روبوكس", "+ NEW GAME": "+ لعبة جديدة", "Your games": "ألعابك",
+	"Plazo Studio": "استوديو بلازو", "+ NEW GAME": "+ لعبة جديدة", "Your games": "ألعابك",
 	"Your games will appear here.": "ألعابك رح تظهر هون.",
 	"Build your own game with blocks, ramps, lava, jump pads, coins and a finish line. Test it, then publish it for everyone.": "ابنِ لعبتك بالبلوكات والمنحدرات واللافا والقافزات والعملات وخط النهاية. جرّبها وبعدين انشرها للكل.",
 	# Friends / records / settings
@@ -79,7 +79,7 @@ const AR: Dictionary = {
 	"MOVE": "تحريك", "SCALE": "تكبير", "TERRAIN": "تضاريس", "EXPLORER": "المستكشف",
 	"REDO": "إعادة", "MULTI": "متعدد", "FOCUS": "تركيز", "PARTS": "قطع", "GAME": "لعب",
 	"NATURE": "طبيعة", "FX": "مؤثرات", "MODELS": "نماذج", "COLOR": "لون",
-	"Roobox Island": "جزيرة روبوكس", "Lava Rising": "اللافا الطالعة", "Color Drop": "سقوط الألوان", "Obby Rush": "أوبي بلا نهاية",
+	"Plazo Island": "جزيرة بلازو", "Lava Rising": "اللافا الطالعة", "Color Drop": "سقوط الألوان", "Obby Rush": "أوبي بلا نهاية",
 }
 
 var language: String = "en"

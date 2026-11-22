@@ -189,7 +189,7 @@ func _build_plaza() -> void:
 		for sz in [-1.0, 1.0]:
 			_lamp(Vector3(sx * 22.0, 0.1, sz * 22.0))
 
-	label(Vector3(0, 11, -22), "ROOBOX", YELLOW, 260)
+	label(Vector3(0, 11, -22), "PLAZO", YELLOW, 260)
 	label(Vector3(0, 8.4, -22), "step on a portal or walk the roads!", Color(1, 1, 1), 70)
 
 	# Portals to every zone.

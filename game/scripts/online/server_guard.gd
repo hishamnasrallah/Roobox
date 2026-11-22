@@ -1,10 +1,10 @@
 class_name ServerGuard
 extends Node
 ## Protects dedicated game servers (configured with environment variables):
-##   ROOBOX_JOIN_SECRET  - when set, players need a signed join pass from the
+##   PLAZO_JOIN_SECRET  - when set, players need a signed join pass from the
 ##                         account server (so banned players can't join)
-##   ROOBOX_BACKEND_URL  - account server, e.g. http://nakama:7350
-##   ROOBOX_HTTP_KEY     - its http key, to ask who to kick / who is muted
+##   PLAZO_BACKEND_URL  - account server, e.g. http://nakama:7350
+##   PLAZO_HTTP_KEY     - its http key, to ask who to kick / who is muted
 ## Without these the server is open (fine for LAN / testing).
 
 const POLL := 15.0
@@ -14,7 +14,7 @@ var _busy: bool = false
 
 
 static func secret() -> String:
-	return OS.get_environment("ROOBOX_JOIN_SECRET")
+	return OS.get_environment("PLAZO_JOIN_SECRET")
 
 
 static func enabled() -> bool:
@@ -40,8 +40,8 @@ static func verify(ticket: String, key: String = "") -> Dictionary:
 func _process(delta: float) -> void:
 	if Network.mode != "server" or _busy:
 		return
-	var url := OS.get_environment("ROOBOX_BACKEND_URL")
-	var key := OS.get_environment("ROOBOX_HTTP_KEY")
+	var url := OS.get_environment("PLAZO_BACKEND_URL")
+	var key := OS.get_environment("PLAZO_HTTP_KEY")
 	if url == "" or key == "":
 		return
 	_t += delta

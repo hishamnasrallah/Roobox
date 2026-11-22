@@ -1,13 +1,13 @@
 ; Engine configuration file.
-; Roobox - Godot 4.7 project (Android first).
+; Plazo - Godot 4.7 project (Android first).
 
 config_version=5
 
 [application]
 
-config/name="Roobox"
+config/name="Plazo"
 config/description="Blocky 3D multiplayer sandbox - Android first."
-config/version="0.20.0"
+config/version="0.21.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 boot_splash/bg_color=Color(0.07, 0.09, 0.16, 1)

@@ -6,7 +6,7 @@ const DEFAULT_ID := "island"
 
 const ENTRIES: Array[Dictionary] = [
 	{
-		"id": "island", "title": "Roobox Island", "tag": "EXPLORE",
+		"id": "island", "title": "Plazo Island", "tag": "EXPLORE",
 		"desc": "A big island with an obby over the ocean, a 60m sky tower, a playground, a maze and a village. Collect coins and set records!",
 		"color": Color(0.3, 0.72, 0.4), "max": 32,
 		"scene": "res://scripts/experiences/island.gd", "mode": "",
@@ -31,7 +31,7 @@ const ENTRIES: Array[Dictionary] = [
 	},
 	{
 		"id": "ugc", "title": "Community Game", "tag": "CREATED", "hidden": true,
-		"desc": "A game made in Roobox Studio.",
+		"desc": "A game made in Plazo Studio.",
 		"color": Color(0.95, 0.5, 0.6), "max": 16,
 		"scene": "res://scripts/experiences/ugc.gd", "mode": "",
 	},

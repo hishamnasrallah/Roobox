@@ -362,6 +362,21 @@ local function join_ticket(context, payload)
 end
 nk.register_rpc(join_ticket, "join_ticket")
 
+-- Deletes your own account and everything stored for it (Google Play
+-- requires in-app account deletion).
+local function delete_my_account(context, payload)
+  if context.user_id == nil then error("not signed in") end
+  for _, o in ipairs(nk.storage_list(context.user_id, "games_index", 100, "") or {}) do
+    nk.storage_delete({
+      { collection = "games_index", key = o.key, user_id = context.user_id },
+      { collection = "games", key = o.key, user_id = context.user_id },
+    })
+  end
+  nk.account_delete_id(context.user_id, false)
+  return nk.json_encode({ ok = true })
+end
+nk.register_rpc(delete_my_account, "delete_my_account")
+
 -- Your own moderation status (chat mute) for the app.
 local function my_status(context, payload)
   local st = mod_state(context.user_id or "")

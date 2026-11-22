@@ -1,5 +1,5 @@
 extends Node
-## CI test for Roobox Studio:
+## CI test for Plazo Studio:
 ##   godot --headless --path game --fixed-fps 60 -- --studiotest
 ## Places parts, rotates, paints, deletes, undoes, saves/loads, then
 ## test-plays the creation and checks the player stands on the spawn.

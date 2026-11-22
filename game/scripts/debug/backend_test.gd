@@ -237,6 +237,16 @@ func _admin_tests(a: NakamaClient, b: NakamaClient, bob_dev: String, mod: Nakama
 	_check((lg.get("log", []) as Array).size() >= 5, "every admin action is logged", (lg.get("log", []) as Array).size())
 	var bl := await a.block_user(after.user_id)
 	_check(bl["ok"], "block a player", bl)
+	# Account deletion (required by Google Play).
+	var dev := _uid()
+	var tmp := NakamaClient.new(self, url)
+	await tmp.authenticate_device(dev, "deleteme")
+	var old_id := tmp.user_id
+	var del := await tmp.rpc("delete_my_account")
+	var fresh := NakamaClient.new(self, url)
+	await fresh.authenticate_device(dev, "deleteme")
+	_check(bool(del.get("ok", false)) and fresh.user_id != "" and fresh.user_id != old_id,
+		"players can delete their account", [del, old_id, fresh.user_id])
 
 
 func _finish() -> void:

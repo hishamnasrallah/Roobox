@@ -1,14 +1,16 @@
-# Roobox
+# Plazo
 
 لعبة 3D جماعية بستايل بلوكي (sandbox / obby) — **أندرويد أولاً** — مبنية على **Godot 4.7**.
 
 > Blocky 3D multiplayer sandbox, Android first, built with Godot 4.7 (Mobile/Vulkan renderer + Jolt physics).
 
+**الموقع:** https://plazo.cloud · **الحزمة:** `com.plazo.game` · **سياسة الخصوصية:** [docs/PRIVACY.md](docs/PRIVACY.md) (صفحة جاهزة للرفع بمجلد [`website/`](website/) ← https://plazo.cloud/privacy) · **التواصل:** privacy@plazo.cloud
+
 ## جرّبها على تلفونك
 
 كل `push` بيبني APK تلقائياً عن طريق GitHub Actions:
 
-1. افتح صفحة **Releases** بالريبو ونزّل `roobox-debug.apk` من إصدار **dev-latest**
+1. افتح صفحة **Releases** بالريبو ونزّل `plazo-debug.apk` من إصدار **dev-latest**
    (أو من تبويب **Actions** ← آخر run ← Artifacts).
 2. افتح الملف على التلفون واسمح بـ "تثبيت تطبيقات غير معروفة".
 
@@ -17,17 +19,17 @@
 - **على نفس الـ Wi-Fi:** تلفون واحد بيضغط **HOST GAME**، وبيطلعله الـ IP فوق الشاشة. الباقي بيكتبوا الـ IP وبيضغطوا **JOIN**.
 - **على الإنترنت:** شغّل السيرفر المستقل على أي VPS (لازم UDP بورت 7777 مفتوح):
   ```bash
-  docker run -d --restart unless-stopped -p 7777:7777/udp ghcr.io/hishamnasrallah/roobox-server:latest
+  docker run -d --restart unless-stopped -p 7777:7777/udp ghcr.io/hishamnasrallah/plazo-server:latest
   ```
   وبعدين كل اللاعبين بيكتبوا IP السيرفر وبيضغطوا JOIN.
-  (أو نزّل `roobox_server.x86_64` من إصدار dev-latest وشغّله: `./roobox_server.x86_64 --headless -- --server --port 7777`)
+  (أو نزّل `plazo_server.x86_64` من إصدار dev-latest وشغّله: `./plazo_server.x86_64 --headless -- --server --port 7777`)
 
 ## السيرفر الكامل (حسابات + أصدقاء + أرقام قياسية + سيرفر لعب)
 
 على أي VPS فيه Docker (مثلاً Ubuntu من Hetzner أو DigitalOcean):
 
 ```bash
-git clone https://github.com/hishamnasrallah/Roobox.git && cd Roobox/backend
+git clone https://github.com/hishamnasrallah/Plazo.git && cd Plazo/backend
 cp .env.example .env && nano .env          # غيّر كلمات السر
 docker compose --profile game up -d        # Nakama + Postgres + سيرفر اللعب
 ```
@@ -35,7 +37,7 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 افتح البورتات: **7350/tcp** (الحسابات) و **7777-7780/udp** (سيرفر لكل لعبة).
 بالتطبيق: **SETTINGS** ← اكتب `http://IP-السيرفر:7350` ← **SAVE & CONNECT**. بعدها زر **PLAY ONLINE** بيدخلك عالسيرفر مباشرة.
 
-> صورة `roobox-server` على ghcr.io خاصة افتراضياً: إما `docker login ghcr.io` على السيرفر، أو خليها Public من صفحة Packages.
+> صورة `plazo-server` على ghcr.io خاصة افتراضياً: إما `docker login ghcr.io` على السيرفر، أو خليها Public من صفحة Packages.
 
 لوحة إدارة Nakama (لاعبين، بيانات، أرقام قياسية) على بورت 7351 ومفتوحة بس محلياً:
 `ssh -L 7351:127.0.0.1:7351 user@السيرفر` وبعدين افتح `http://localhost:7351`.
@@ -44,7 +46,7 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 
 | اللعبة | النوع | الفكرة |
 |---|---|---|
-| **Roobox Island** | استكشاف | جزيرة كبيرة: Obby Land، Sky Tower، Playground، متاهة، قرية |
+| **Plazo Island** | استكشاف | جزيرة كبيرة: Obby Land، Sky Tower، Playground، متاهة، قرية |
 | **Lava Rising** | نجاة | اللافا بتطلع — تسلّق البرج وضل عايش أطول وقت |
 | **Color Drop** | حفلة | بيطلع لون — اركض لبلاطة من نفس اللون قبل ما يختفي الباقي |
 | **Obby Rush** | obby | مراحل لا نهائية مولّدة، كل مرحلة أصعب |
@@ -61,7 +63,7 @@ docker compose --profile game up -d        # Nakama + Postgres + سيرفر ال
 - **صور حقيقية:** كل لعبة إلها صورة 3D بتنرسم من خريطتها أول مرة بتظهر وبتنحفظ بالجهاز.
 - تبويب PLAY: صف أفقي لكل نوع (بتسحبه بإصبعك) + بحث + فلترة. كل لعبة: PLAY SOLO / HOST / JOIN / **REMIX IN STUDIO**.
 
-## Roobox Studio (اصنع لعبتك)
+## Plazo Studio (اصنع لعبتك)
 
 من تبويب **CREATE** ← **+ NEW GAME**:
 - **الكاميرا:** إصبع واحد للدوران (ولمسة سريعة = استعمال الأداة)، إصبعين للزووم والتحريك، UP/DOWN للارتفاع. بالكمبيوتر: WASD + Q/E + الماوس.
@@ -200,4 +202,4 @@ docs/ROADMAP.md            خطة المراحل
 
 ## ملاحظة عن الاسم
 
-`Roobox` اسم مؤقت للمشروع. قبل النشر على Google Play لازم نختار اسم وهوية أصلية مختلفة بوضوح عن أي علامة تجارية موجودة.
+`Plazo` اسم مؤقت للمشروع. قبل النشر على Google Play لازم نختار اسم وهوية أصلية مختلفة بوضوح عن أي علامة تجارية موجودة.

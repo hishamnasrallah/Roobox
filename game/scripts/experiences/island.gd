@@ -1,5 +1,5 @@
 extends Experience
-## Roobox Island: the big hub world (obby, sky tower, playground, village).
+## Plazo Island: the big hub world (obby, sky tower, playground, village).
 
 var world: World
 
