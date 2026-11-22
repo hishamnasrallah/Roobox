@@ -54,6 +54,13 @@ func _ready() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 16)
 	vb.add_child(head)
+	var logo := TextureRect.new()
+	logo.texture = load("res://icon.svg")
+	logo.custom_minimum_size = Vector2(64, 64)
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(logo)
 	var title := UiStyle.label(56, Color(1.0, 0.85, 0.25))
 	title.text = "PLAZO"
 	head.add_child(title)

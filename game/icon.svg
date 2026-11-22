@@ -1,16 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#4f8cff"/>
-      <stop offset="1" stop-color="#7b5cff"/>
-    </linearGradient>
-  </defs>
-  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
-  <g transform="translate(128 132) rotate(-12)">
-    <rect x="-62" y="-62" width="124" height="124" rx="18" fill="#ffb347"/>
-    <rect x="-62" y="-62" width="124" height="40" rx="18" fill="#ffd27a"/>
-    <rect x="-34" y="-14" width="18" height="30" rx="8" fill="#1d1d2b"/>
-    <rect x="16" y="-14" width="18" height="30" rx="8" fill="#1d1d2b"/>
-    <path d="M-26 32 Q0 52 26 32" stroke="#1d1d2b" stroke-width="9" fill="none" stroke-linecap="round"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3D7BFF"/><stop offset="1" stop-color="#8A4DFF"/></linearGradient>
+<radialGradient id="glow" cx="0.35" cy="0.25" r="0.75"><stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+<linearGradient id="left" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFB547"/><stop offset="1" stop-color="#FF8A2A"/></linearGradient>
+<linearGradient id="right" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0752E"/><stop offset="1" stop-color="#D9541F"/></linearGradient>
+<linearGradient id="top" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE793"/><stop offset="1" stop-color="#FFD15A"/></linearGradient>
+</defs><rect width="256" height="256" fill="url(#bg)"/><rect width="256" height="256" fill="url(#glow)"/><g transform="translate(128 128) scale(1.0) translate(-128 -128)"><ellipse cx="128" cy="226" rx="70" ry="12" fill="#000" opacity="0.22"/><polygon points="50,85 128,130 128,220 50,175" fill="url(#left)"/><polygon points="128,130 206,85 206,175 128,220" fill="url(#right)"/><polygon points="128,40 206,85 128,130 50,85" fill="url(#top)"/><polyline points="50,85 128,130 206,85" fill="none" stroke="#FFF4C8" stroke-width="3" stroke-linejoin="round" opacity="0.9"/><line x1="128" y1="130" x2="128" y2="220" stroke="#B9461A" stroke-width="2" opacity="0.5"/><g transform="matrix(0.78 0.45 0 0.9 50 85)"><path d="M16 10 H60 C82 10 92 24 92 41 C92 59 80 71 59 71 H41 V92 H16 Z M41 30 V51 H57 C64 51 68 47 68 40.5 C68 34 64 30 57 30 Z" transform="translate(3 4)" fill="#7A2E0E" opacity="0.35" fill-rule="evenodd"/><path d="M16 10 H60 C82 10 92 24 92 41 C92 59 80 71 59 71 H41 V92 H16 Z M41 30 V51 H57 C64 51 68 47 68 40.5 C68 34 64 30 57 30 Z" fill="#FFFFFF" fill-rule="evenodd"/></g></g></svg>
