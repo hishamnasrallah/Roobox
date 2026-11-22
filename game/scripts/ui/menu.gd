@@ -212,6 +212,9 @@ func _build_discover() -> void:
 			grid.add_child(_card(e))
 	_build_library()
 	_text(_content, "Community games", 34, Color(1.0, 0.85, 0.3))
+	if Game.parental_on("no_online"):
+		_text(_content, "Community games are turned off in parental controls.", 20, Color(1, 1, 1, 0.6))
+		return
 	if not Backend.online:
 		_text(_content, "Connect an account server (SETTINGS) to play games made by other players.", 20, Color(1, 1, 1, 0.6))
 		return
@@ -719,6 +722,9 @@ func _best_text(exp_id: String) -> String:
 
 
 func _play(exp_id: String, mode: String, address: String) -> void:
+	if mode != "offline" and Game.parental_on("no_online"):
+		show_status(tr("Playing with others is turned off in parental controls."), true)
+		return
 	Game.note_played(exp_id)
 	_save_name_if_needed()
 	play_requested.emit(exp_id, mode, address)
@@ -915,6 +921,87 @@ func _refresh_swatches(key: String) -> void:
 
 # ------------------------------------------------------------ settings ---
 
+var _parental_unlocked: bool = false
+
+
+## Parental controls: limits locked behind a 4-digit PIN.
+func _build_parental(c: Control) -> void:
+	_text(c, "Parental controls", 24, Color(1.0, 0.85, 0.3))
+	var locked := Game.parental_locked() and not _parental_unlocked
+	if locked:
+		_text(c, "Locked with a PIN. Enter it to change these settings.", 18, Color(1, 1, 1, 0.75))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		c.add_child(row)
+		var pin := UiStyle.line_edit("PIN", 24)
+		pin.secret = true
+		pin.max_length = 4
+		pin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(pin)
+		var ub := UiStyle.button("UNLOCK", Color(0.25, 0.5, 0.95), 20, 56)
+		ub.custom_minimum_size.x = 160
+		ub.pressed.connect(_unlock_parental.bind(pin))
+		row.add_child(ub)
+	for spec in [["no_chat", "Turn off chat"], ["no_online", "Turn off playing with others online"],
+			["no_publish", "Turn off publishing games"], ["no_friends", "Turn off friends"]]:
+		var cb := CheckButton.new()
+		cb.text = tr(str(spec[1]))
+		cb.button_pressed = Game.parental_on(str(spec[0]))
+		cb.disabled = locked
+		cb.add_theme_font_size_override("font_size", 20)
+		cb.toggled.connect(_set_parental.bind(str(spec[0])))
+		c.add_child(cb)
+	if not locked:
+		var row2 := HBoxContainer.new()
+		row2.add_theme_constant_override("separation", 8)
+		c.add_child(row2)
+		var newpin := UiStyle.line_edit("New 4-digit PIN", 22)
+		newpin.max_length = 4
+		newpin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row2.add_child(newpin)
+		var sb := UiStyle.button("SET PIN", Color(0.2, 0.6, 0.35), 18, 56)
+		sb.custom_minimum_size.x = 140
+		sb.pressed.connect(_set_pin.bind(newpin))
+		row2.add_child(sb)
+		if Game.parental_locked():
+			var rb := UiStyle.button("REMOVE PIN", Color(0.6, 0.3, 0.3), 18, 56)
+			rb.custom_minimum_size.x = 160
+			rb.pressed.connect(_remove_pin)
+			row2.add_child(rb)
+
+
+func _set_parental(on: bool, key: String) -> void:
+	if Game.parental_locked() and not _parental_unlocked:
+		return
+	Game.parental[key] = on
+	Game.save_profile()
+
+
+func _unlock_parental(pin: LineEdit) -> void:
+	if pin.text == str(Game.parental.get("pin", "")):
+		_parental_unlocked = true
+		open_tab("SETTINGS")
+	else:
+		show_status(tr("Wrong PIN."), true)
+
+
+func _set_pin(field: LineEdit) -> void:
+	var t := field.text.strip_edges()
+	if t.length() != 4 or not t.is_valid_int():
+		show_status(tr("The PIN must be 4 digits."), true)
+		return
+	Game.parental["pin"] = t
+	Game.save_profile()
+	_parental_unlocked = false
+	show_status(tr("PIN saved - parental controls are locked."))
+	open_tab("SETTINGS")
+
+
+func _remove_pin() -> void:
+	Game.parental["pin"] = ""
+	Game.save_profile()
+	open_tab("SETTINGS")
+
 func _build_settings() -> void:
 	var c := _content
 	_text(c, "Language", 24, Color(1.0, 0.85, 0.3))
@@ -973,6 +1060,8 @@ func _build_settings() -> void:
 	chat.toggled.connect(func(on: bool) -> void: _set_setting("chat_enabled", on))
 	c.add_child(chat)
 
+	_build_parental(c)
+
 	_text(c, "Account", 24, Color(1.0, 0.85, 0.3))
 	_text(c, "Account server (Nakama) - enables accounts, friends, cloud save, world records and online play. Leave empty to play as a guest.", 20, Color(1, 1, 1, 0.8))
 	var url := UiStyle.line_edit("http://YOUR-SERVER-IP:7350", 24)
@@ -1029,6 +1118,9 @@ func _save_settings(url_text: String, key_text: String, status: Label) -> void:
 
 func _build_friends() -> void:
 	var c := _content
+	if Game.parental_on("no_friends"):
+		_text(c, "Friends are turned off in parental controls (SETTINGS).", 24)
+		return
 	if not Backend.online:
 		_text(c, "Friends need an account server. Open SETTINGS and connect first.", 24)
 		return
@@ -1065,6 +1157,11 @@ func _add_friend(input: LineEdit, info: Label, list: VBoxContainer) -> void:
 	_reload_friends(list)
 
 
+func _join_friend(exp_id: String, server: String) -> void:
+	show_status(tr("Joining your friend..."))
+	_join(exp_id, server)
+
+
 func _reload_friends(list: VBoxContainer) -> void:
 	var friends: Array = await Backend.friends()
 	if not is_instance_valid(list):
@@ -1084,7 +1181,9 @@ func _reload_friends(list: VBoxContainer) -> void:
 		var tag := ""
 		match state:
 			0:
-				tag = "online" if f["online"] else "offline"
+				tag = "offline"
+				if f["online"]:
+					tag = tr("playing %s") % f["playing"] if str(f["playing"]) != "" else tr("online - in the menu")
 			1:
 				tag = "request sent"
 			2:
@@ -1093,6 +1192,11 @@ func _reload_friends(list: VBoxContainer) -> void:
 			Color(0.6, 1.0, 0.65) if state == 0 and f["online"] else Color(1, 1, 1))
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var id: String = f["id"]
+		if state == 0 and str(f["server"]) != "" and str(f["exp"]) != "" and not Game.parental_on("no_online"):
+			var jb := UiStyle.button("JOIN", Color(1.0, 0.55, 0.2), 18, 48)
+			jb.custom_minimum_size.x = 100
+			jb.pressed.connect(_join_friend.bind(str(f["exp"]), str(f["server"])))
+			row.add_child(jb)
 		if state == 2:
 			var acc := UiStyle.button("ACCEPT", Color(0.2, 0.72, 0.35), 18, 48)
 			acc.pressed.connect(func() -> void: _friend_action(id, true, list))

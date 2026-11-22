@@ -260,7 +260,7 @@ func refresh_coins() -> void:
 # ------------------------------------------------------------------ chat ---
 
 func open_chat() -> void:
-	if not Game.chat_enabled:
+	if not Game.chat_allowed():
 		show_toast("Chat is off (SETTINGS)", Color(1, 0.8, 0.5))
 		return
 	_chat_edit.visible = true
@@ -285,7 +285,7 @@ func _on_chat_submitted(text: String) -> void:
 			Game.emote_requested.emit(id)
 		else:
 			add_chat_line("Emotes: " + ", ".join(Game.EMOTES.slice(1)), Color(0.7, 0.85, 1.0))
-	elif t != "":
+	elif t != "" and Game.chat_allowed():
 		Network.send_chat(t)
 	close_chat()
 
@@ -310,7 +310,7 @@ func _on_chat_received(_id: int, sender: String, text: String) -> void:
 	_chat_history.append("%s: %s" % [sender, text])
 	if _chat_history.size() > 40:
 		_chat_history.pop_front()
-	if not Game.chat_enabled or sender in Game.muted:
+	if not Game.chat_allowed() or sender in Game.muted:
 		return
 	add_chat_line("%s: %s" % [sender, ChatFilter.clean(text)])
 	Sfx.play("pop", -4.0)

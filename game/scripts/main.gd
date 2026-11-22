@@ -66,6 +66,8 @@ func _ready() -> void:
 	Network.chat_received.connect(_on_chat_bubble)
 	Network.mode_event.connect(_on_network_mode_event)
 	Network.script_touched.connect(_on_script_touched)
+	Network.script_joined.connect(_on_script_joined)
+	Network.player_left.connect(_on_script_left)
 
 	if Game.resume_studio != "":
 		var resume := Game.resume_studio
@@ -143,6 +145,7 @@ func _on_network_mode_event(ev: Dictionary) -> void:
 
 func _show_menu() -> void:
 	_build_menu_stage()
+	Backend.set_presence("", "", "")
 	menu = MainMenu.new()
 	add_child(menu)
 	menu.play_requested.connect(_on_play_requested)
@@ -363,6 +366,15 @@ func _start_game(exp_id: String) -> void:
 		_setup_ugc_scripts()
 
 	var title: String = Catalog.get_entry(exp_id)["title"]
+	var shown_title := str(Game.pending_level.get("name", title)) if exp_id == "ugc" else title
+	var server := ""
+	if Network.mode == "host":
+		var lan := Network.local_addresses()
+		if lan.size() > 0:
+			server = "%s:%d" % [lan[0], Network.DEFAULT_PORT]
+	elif Network.mode == "client":
+		server = Network.joined_address
+	Backend.set_presence(exp_id, shown_title, server)
 	match Network.mode:
 		"host":
 			var ips := Network.local_addresses()
@@ -394,6 +406,9 @@ func _setup_ugc_scripts() -> void:
 		host.log_line.connect(_on_script_log)
 		game_mode = host
 		add_child(host)
+		host.fire_join(Network.my_id(), GameData.load_game(GameData.game_key(ugc.get("level"))))
+	elif Network.mode == "client":
+		Network.send_script_join(GameData.load_game(GameData.game_key(ugc.get("level"))))
 	Network.snapshot_provider = _ugc_snapshot
 
 
@@ -414,6 +429,16 @@ func _on_ugc_touched(part_name: String) -> void:
 func _on_script_touched(peer_id: int, part_name: String) -> void:
 	if game_mode is ScriptHost:
 		(game_mode as ScriptHost).fire_touch(part_name, peer_id)
+
+
+func _on_script_joined(peer_id: int, data: Dictionary) -> void:
+	if game_mode is ScriptHost:
+		(game_mode as ScriptHost).fire_join(peer_id, data)
+
+
+func _on_script_left(peer_id: int) -> void:
+	if game_mode is ScriptHost:
+		(game_mode as ScriptHost).fire_leave(peer_id)
 
 
 func _on_script_log(text: String) -> void:
@@ -458,7 +483,7 @@ func _go_home() -> void:
 
 ## Chat speech bubbles above the speaker.
 func _on_chat_bubble(id: int, sender: String, text: String) -> void:
-	if not Game.chat_enabled or sender in Game.muted:
+	if not Game.chat_allowed() or sender in Game.muted:
 		return
 	var av: Avatar = null
 	if id == Network.my_id() and player != null:

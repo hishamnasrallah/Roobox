@@ -7,6 +7,10 @@ extends Node
 signal status_changed
 
 const AUTOSAVE_INTERVAL := 45.0
+## Presence ("what am I playing") is refreshed this often; friends treat
+## anything older than PRESENCE_FRESH seconds as offline.
+const PRESENCE_INTERVAL := 60.0
+const PRESENCE_FRESH := 300
 
 var client: NakamaClient = null
 var online: bool = false
@@ -14,6 +18,8 @@ var busy: bool = false
 var last_error: String = ""
 var _autosave_t: float = 0.0
 var _dirty: bool = false
+var _presence: Dictionary = {}
+var _presence_t: float = 0.0
 
 
 func _ready() -> void:
@@ -29,6 +35,46 @@ func _process(delta: float) -> void:
 	if _autosave_t >= AUTOSAVE_INTERVAL and _dirty:
 		_autosave_t = 0.0
 		push_progress()
+	_presence_t += delta
+	if _presence_t >= PRESENCE_INTERVAL and not _presence.is_empty():
+		_presence_t = 0.0
+		_write_presence()
+
+
+# ----------------------------------------------------------- presence ---
+
+## Tells friends what you are playing. server = "host:port" they can join
+## ("" = not joinable, e.g. solo). exp_id "" = in the menu.
+func set_presence(exp_id: String, title: String, server: String) -> void:
+	if Game.parental_on("no_online"):
+		server = ""
+	_presence = {"exp": exp_id, "title": title.substr(0, 40), "server": server}
+	_presence_t = 0.0
+	if online:
+		_write_presence()
+
+
+func _write_presence() -> void:
+	var p := _presence.duplicate()
+	p["t"] = int(Time.get_unix_time_from_system())
+	await client.write_object("presence", "now", p, true)
+
+
+## Presence of these user ids: {user_id: {exp, title, server, fresh}}.
+func presence_of(user_ids: Array) -> Dictionary:
+	var out := {}
+	if not online or user_ids.is_empty():
+		return out
+	var ids: Array = []
+	for uid in user_ids:
+		ids.append({"collection": "presence", "key": "now", "user_id": str(uid)})
+	var now := int(Time.get_unix_time_from_system())
+	for o: Dictionary in await client.read_objects(ids):
+		var v: Dictionary = o["value"]
+		var fresh := absi(now - int(v.get("t", 0))) < PRESENCE_FRESH
+		out[o["user_id"]] = {"exp": str(v.get("exp", "")), "title": str(v.get("title", "")),
+			"server": str(v.get("server", "")), "fresh": fresh}
+	return out
 
 
 func _notification(what: int) -> void:
@@ -255,6 +301,7 @@ func friends() -> Array:
 		return []
 	var out: Array = []
 	var raw: Array = await client.list_friends()
+	var mutual: Array = []
 	for f: Dictionary in raw:
 		var u: Dictionary = f.get("user", {})
 		out.append({
@@ -263,7 +310,18 @@ func friends() -> Array:
 			"name": str(u.get("display_name", u.get("username", ""))),
 			"online": bool(u.get("online", false)),
 			"state": int(f.get("state", 0)),
+			"playing": "", "exp": "", "server": "",
 		})
+		if int(f.get("state", 0)) == 0:
+			mutual.append(str(u.get("id", "")))
+	var pres := await presence_of(mutual)
+	for f: Dictionary in out:
+		var p: Dictionary = pres.get(f["id"], {})
+		if p.get("fresh", false):
+			f["online"] = true
+			f["playing"] = p["title"]
+			f["exp"] = p["exp"]
+			f["server"] = p["server"]
 	return out
 
 

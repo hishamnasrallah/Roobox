@@ -494,6 +494,9 @@ func _island(c: Vector3, top: float, size: float) -> void:
 func _gen_race() -> void:
 	_ground(16)
 	_spawn(0, 0, 4)
+	# Karts at the start: drive the track or run it on foot.
+	_part("kart", Vector3(-5, 1, 4), Vector3(3, 2, 4), 4)
+	_part("kart", Vector3(5, 1, 4), Vector3(3, 2, 4), 8)
 	var x := 0.0
 	var z := 0.0
 	var dir := Vector2(0, -1)
@@ -1268,6 +1271,9 @@ func _gen_hangout_b() -> void:
 		_part("light", Vector3(-6 + i * 3, 4, -22), Vector3.ONE, 4 + i)
 	_part("sign", Vector3(0, 3, -23.4), Vector3(8, 2, 0.4), 3, "", {"txt": "Welcome to the park!", "r": 2})
 	_part("fire", Vector3(14, 0.5, 14), Vector3(1.5, 1.5, 1.5), 5)
+	for i in 4:
+		_part("seat", Vector3(10 + i * 2.5, 0.5, 17), Vector3(2, 1, 2), 3, "", {"r": 2})
+	_part("kart", Vector3(-20, 1, 20), Vector3(3, 2, 4), 4)
 	_part("block", Vector3(14, 0.25, 14), Vector3(2, 0.5, 2), 3, "log")
 	_decor(30, 16)
 	script_text = """-- The stage lights change color.

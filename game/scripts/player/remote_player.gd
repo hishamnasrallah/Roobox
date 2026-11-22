@@ -96,6 +96,12 @@ func _process(delta: float) -> void:
 	avatar.rotation.y = yaw
 	var hs := Vector2(vel.x, vel.z).length()
 	avatar.auto_expire = false
+	var vi := (flags >> 7) & 1023
+	if vi > 0:
+		avatar.global_position += Vector3(0, 0.6, 0)
+		for k in get_tree().get_nodes_in_group("karts"):
+			if (k as Kart).index == vi - 1 and not ((k as Kart).driver is Player):
+				(k as Kart).follow(avatar.global_position - Vector3(0, 0.6, 0), avatar.rotation.y)
 	var ei := (flags >> 2) & 15
 	avatar.play_emote(Game.EMOTES[ei] if ei < Game.EMOTES.size() else "")
 	avatar.animate(delta, hs / 8.5, (flags & 1) != 0, vel.y)

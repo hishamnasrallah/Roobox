@@ -37,6 +37,12 @@ var water_count: int = 0
 var climb_count: int = 0
 var external_velocity: Vector3 = Vector3.ZERO
 var _boost_t: float = 0.0
+## Seat or kart we are in (null = on foot).
+var seat_node: Node3D = null
+var vehicle: Kart = null
+var _seat_cool: float = 0.0
+var _car_speed: float = 0.0
+var _car_yaw: float = 0.0
 ## Gear effects (reset when you respawn).
 var gear_speed: float = 1.0
 var gear_gravity: float = 1.0
@@ -67,6 +73,16 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _dead:
 		return
+	_seat_cool = maxf(_seat_cool - delta, 0.0)
+	if seat_node != null:
+		if not is_instance_valid(seat_node):
+			leave_seat()
+		elif vehicle != null:
+			_drive(delta)
+			return
+		else:
+			_sit(delta)
+			return
 
 	var on_floor := is_on_floor()
 	if on_floor:
@@ -154,19 +170,114 @@ func _physics_process(delta: float) -> void:
 	if global_position.y < kill_height:
 		Game.kill_player()
 
+	_send_net(delta)
+
+
+func _send_net(delta: float) -> void:
 	_net_timer += delta
 	if _net_timer >= NET_RATE and Network.is_online():
 		_net_timer = 0.0
 		var flags := (1 if is_on_floor() else 0) | (2 if _dead else 0) | (emote_index() << 2)
+		if vehicle != null:
+			flags |= (vehicle.index + 1) << 7
 		var net_yaw := avatar.rotation.y if avatar != null else _target_yaw
 		Network.send_state(global_position, net_yaw, get_real_velocity(), flags)
+
+
+# -------------------------------------------------------- seats / karts ---
+
+func sit_on(seat: Node3D) -> void:
+	if seat_node != null or _seat_cool > 0.0 or _dead:
+		return
+	seat_node = seat
+	velocity = Vector3.ZERO
+	_target_yaw = seat.global_rotation.y
+	if avatar != null:
+		avatar.play_emote("sit")
+
+
+func enter_vehicle(kart: Kart) -> void:
+	if seat_node != null or _seat_cool > 0.0 or _dead or kart.driver != null:
+		return
+	seat_node = kart
+	vehicle = kart
+	kart.set_driver(self)
+	global_position = kart.global_position + Vector3(0, 0.1, 0)
+	_car_yaw = kart.global_rotation.y
+	_car_speed = 0.0
+	reset_physics_interpolation()
+	if avatar != null:
+		avatar.play_emote("sit")
+	Game.notice.emit("Joystick to drive - JUMP to get out")
+
+
+func leave_seat() -> void:
+	if vehicle != null and is_instance_valid(vehicle):
+		vehicle.set_driver(null)
+		var side := Basis(Vector3.UP, _car_yaw) * Vector3(2.0, 0, 0)
+		global_position += side + Vector3(0, 0.5, 0)
+	elif seat_node != null and is_instance_valid(seat_node):
+		global_position += seat_node.global_basis * Vector3(0, 0.5, -1.4)
+	seat_node = null
+	vehicle = null
+	_seat_cool = 1.2
+	velocity = Vector3(0, 6.0, 0)
+	if avatar != null:
+		avatar.emote = ""
+	reset_physics_interpolation()
+
+
+func car_yaw() -> float:
+	return _car_yaw
+
+
+func _sit(delta: float) -> void:
+	var seat := seat_node as Seat
+	global_position = seat.seat_point() if seat != null else seat_node.global_position
+	velocity = Vector3.ZERO
+	if avatar != null and avatar.emote != "sit":
+		avatar.play_emote("sit")
+	if Game.consume_jump() or Game.get_move_input().length() > 0.6:
+		leave_seat()
+	_send_net(delta)
+
+
+func _drive(delta: float) -> void:
+	var input := Game.get_move_input()
+	var target := input.y * vehicle.max_speed
+	var rate := vehicle.friction
+	if absf(input.y) > 0.1:
+		rate = vehicle.brake if signf(target) != signf(_car_speed) and absf(_car_speed) > 0.5 else vehicle.accel
+	_car_speed = move_toward(_car_speed, target, rate * delta)
+	_car_yaw -= input.x * vehicle.turn * delta * clampf(_car_speed / 6.0, -1.0, 1.0)
+	var fwd := Vector3(-sin(_car_yaw), 0, -cos(_car_yaw))
+	velocity.x = fwd.x * _car_speed
+	velocity.z = fwd.z * _car_speed
+	if is_on_floor():
+		velocity.y = -1.0
+	else:
+		velocity.y = maxf(velocity.y - gravity * delta, -48.0)
+	move_and_slide()
+	if is_on_wall():
+		_car_speed *= 0.5
+	_target_yaw = _car_yaw
+	if avatar != null and avatar.emote != "sit":
+		avatar.play_emote("sit")
+	if Game.consume_jump():
+		leave_seat()
+	if global_position.y < kill_height:
+		leave_seat()
+		Game.kill_player()
+	_send_net(delta)
 
 
 func _process(delta: float) -> void:
 	if avatar == null:
 		return
 	var t := get_global_transform_interpolated()
-	avatar.global_position = t.origin
+	avatar.global_position = t.origin + (Vector3(0, 0.6, 0) if vehicle != null else Vector3.ZERO)
+	if vehicle != null:
+		avatar.rotation.y = _car_yaw
 	avatar.rotation.y = lerp_angle(avatar.rotation.y, _target_yaw, 1.0 - exp(-turn_speed * delta))
 	var hs := Vector2(velocity.x, velocity.z).length()
 	avatar.animate(delta, hs / max_speed, is_on_floor() or _dead, velocity.y)
@@ -262,6 +373,8 @@ func teleport(pos: Vector3) -> void:
 func _on_died() -> void:
 	if _dead:
 		return
+	if seat_node != null:
+		leave_seat()
 	_dead = true
 	velocity = Vector3.ZERO
 	Sfx.play("die")

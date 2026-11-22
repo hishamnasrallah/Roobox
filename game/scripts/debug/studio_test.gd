@@ -204,6 +204,10 @@ func _run() -> void:
 	st.select({})
 	st.set_tool("build")
 	var kk := 0
+	st.set_preset("seat")
+	st.place_at(Vector3(-20, 0, 10), Vector3.UP)
+	st.set_preset("kart")
+	st.place_at(Vector3(20, 0, 20), Vector3.UP)
 	for id in ["corner", "truss", "fire", "smoke", "sparkles", "speedcoil", "gravitycoil"]:
 		st.set_preset(id)
 		var np := st.place_at(Vector3(-28 + kk * 5, 0, -34), Vector3.UP)
@@ -218,6 +222,10 @@ func _run() -> void:
   ui.status("hello")
 end)
 every(0.5, function() score.add(1) end)
+on_join(function(p)
+  p:set_stat("Joined", 1)
+  p:set_data("visits", (p:get_data("visits") or 0) + 1)
+end)
 on_touch("door", function(p)
   p:add_stat("Touches", 1)
   p:give_coins(7)
@@ -289,6 +297,34 @@ end)
 		if n3 is GearPickup:
 			gears += 1
 	_check(gears == 2, "coil parts become pickups in play", gears)
+	_check(hs != null and float((hs._stats.get(Network.my_id(), {}) as Dictionary).get("Joined", 0)) == 1.0
+		and float((hs._pdata.get(Network.my_id(), {}) as Dictionary).get("visits", 0)) == 1.0,
+		"on_join runs with saved player data", hs._pdata if hs != null else null)
+	var kart: Kart = null
+	var seat: Seat = null
+	for n4 in ex.get_children():
+		if n4 is Kart:
+			kart = n4
+		elif n4 is Seat:
+			seat = n4
+	_check(kart != null and seat != null, "seat and kart parts exist in play")
+	if seat != null:
+		player.sit_on(seat)
+		await get_tree().physics_frame
+		_check(player.seat_node == seat and player.avatar.emote == "sit", "sitting on a seat")
+		player.leave_seat()
+		await get_tree().create_timer(1.3).timeout
+	if kart != null:
+		player.enter_vehicle(kart)
+		_check(player.vehicle == kart and kart.driver == player, "getting into a kart")
+		Game.touch_move = Vector2(0, 1)
+		var k0 := player.global_position
+		await get_tree().create_timer(1.0).timeout
+		Game.touch_move = Vector2.ZERO
+		_check(player.global_position.distance_to(k0) > 3.0 and kart.global_position.distance_to(player.global_position) < 1.0,
+			"driving moves the player and the kart", [k0, player.global_position])
+		player.leave_seat()
+		_check(player.vehicle == null and kart.driver == null, "getting out of the kart")
 	var phys := false
 	for n2 in ex.get_children():
 		if n2 is RigidBody3D:

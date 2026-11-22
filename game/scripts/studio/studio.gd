@@ -1448,6 +1448,17 @@ func _add_visual(body: Node3D, part: Dictionary, t: String, s: Vector3, col: Col
 			bulb.material_override = Fx.glow_material(col, 3.0)
 			body.add_child(bulb)
 			return
+		"seat":
+			_mesh(body, Vector3(0, -s.y * 0.25, 0), Vector3(s.x, s.y * 0.5, s.z), _material(col, false))
+			_mesh(body, Vector3(0, s.y * 0.5, s.z * 0.42), Vector3(s.x, s.y * 1.2, s.z * 0.16), _material(col, false))
+			return
+		"kart":
+			_mesh(body, Vector3(0, -s.y * 0.5 + 0.55, 0), Vector3(2.2, 0.5, 3.6), _material(col, false))
+			_mesh(body, Vector3(0, -s.y * 0.5 + 0.95, 0.5), Vector3(1.3, 0.35, 1.2), _material(Color(0.15, 0.15, 0.2), false))
+			for sx in [-1.0, 1.0]:
+				for sz2 in [-1.0, 1.0]:
+					_mesh(body, Vector3(sx * 1.2, -s.y * 0.5 + 0.35, sz2 * 1.2), Vector3(0.45, 0.7, 0.75), _material(Color(0.12, 0.12, 0.15), false))
+			return
 		"fire", "smoke", "sparkles":
 			var fx := Level.effect_node(t, col, s)
 			body.add_child(fx)
@@ -2220,6 +2231,9 @@ func _on_test() -> void:
 
 func _on_publish() -> void:
 	save()
+	if Game.parental_on("no_publish"):
+		_say("Publishing is turned off in parental controls.")
+		return
 	if not Backend.online:
 		_say("Connect an account server (menu > SETTINGS) to publish.")
 		return

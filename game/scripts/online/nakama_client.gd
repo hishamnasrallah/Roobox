@@ -146,6 +146,22 @@ func read_object(collection: String, key: String, owner_id: String = "") -> Dict
 	return parsed if parsed is Dictionary else {}
 
 
+## Reads several objects at once: ids = [{collection, key, user_id}].
+## Returns [{user_id, key, value: Dictionary}] for the ones that exist.
+func read_objects(ids: Array) -> Array:
+	if ids.is_empty():
+		return []
+	var r := await request(HTTPClient.METHOD_POST, "/v2/storage", {"object_ids": ids})
+	if not r["ok"]:
+		return []
+	var out: Array = []
+	for o: Dictionary in (r["data"] as Dictionary).get("objects", []):
+		var v: Variant = JSON.parse_string(str(o.get("value", "{}")))
+		out.append({"user_id": str(o.get("user_id", "")), "key": str(o.get("key", "")),
+			"value": v if v is Dictionary else {}})
+	return out
+
+
 ## Lists publicly readable objects of a collection (all users).
 ## Returns [{key, user_id, value: Dictionary}] (empty on error).
 func list_public(collection: String, limit: int = 50) -> Array:

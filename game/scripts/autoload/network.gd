@@ -21,6 +21,8 @@ signal welcomed(experience_id: String, snapshot: Dictionary)
 signal mode_event(ev: Dictionary)
 ## (authority only) a player touched a named scripted part.
 signal script_touched(peer_id: int, part_name: String)
+## (authority only) a client is ready in a scripted game; data = its saved data.
+signal script_joined(peer_id: int, data: Dictionary)
 
 const DEFAULT_PORT := 7777
 const MAX_PLAYERS := 32
@@ -32,6 +34,8 @@ var mode: String = "offline"
 var experience_id: String = "island"
 ## Returns the current GameMode snapshot for late joiners (set by main).
 var snapshot_provider: Callable = Callable()
+## "host:port" of the server we joined (for friends to follow us).
+var joined_address: String = ""
 ## id -> {name, shirt, pants, skin}
 var players: Dictionary = {}
 
@@ -100,6 +104,7 @@ func join(address: String, port: int = DEFAULT_PORT) -> Error:
 	var err := peer.create_client(address, port)
 	if err != OK:
 		return err
+	joined_address = "%s:%d" % [address, port]
 	multiplayer.multiplayer_peer = peer
 	mode = "client"
 	players.clear()
@@ -217,6 +222,18 @@ func send_mode_event(ev: Dictionary, reliable: bool = true) -> void:
 		_mode_event.rpc(ev)
 	else:
 		_mode_event_u.rpc(ev)
+
+
+## Client -> authority: "I'm in the game, here is my saved data".
+func send_script_join(data: Dictionary) -> void:
+	if mode == "client":
+		_script_join.rpc_id(1, GameData.clean(data))
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _script_join(data: Dictionary) -> void:
+	if is_server():
+		script_joined.emit(multiplayer.get_remote_sender_id(), GameData.clean(data))
 
 
 ## Client -> authority: "I touched this named part" (UGC scripts).

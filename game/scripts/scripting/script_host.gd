@@ -5,7 +5,8 @@ extends GameMode
 ## actions go to the targeted player. Late joiners get the current state.
 ##
 ## Script API:
-##   on_start(fn)  on_touch(name, fn(player, part))  after(sec, fn)  every(sec, fn)
+##   on_start(fn)  on_touch(name, fn(player, part))
+##   on_join(fn(player))  on_leave(fn(player))   (every player, incl. you)  after(sec, fn)  every(sec, fn)
 ##   cancel(id)    time()                      print(...)
 ##   world.find(name) -> part   part:set_color(i) part:set_visible(b)
 ##       part:set_solid(b) part:move_to(x,y,z[,sec]) part:move_by(dx,dy,dz[,sec])
@@ -40,6 +41,10 @@ var _ops: Dictionary = {}
 var _time: float = 0.0
 ## Leaderboard: peer_id -> {stat: value}
 var _stats: Dictionary = {}
+## Saved player data (from each player's device): peer_id -> {key: value}
+var _pdata: Dictionary = {}
+var _join: Array = []
+var _leave: Array = []
 
 
 func _ready() -> void:
@@ -117,6 +122,8 @@ func _report(err: String) -> void:
 func _install_api() -> void:
 	vm.set_global("on_start", _api_on_start)
 	vm.set_global("on_touch", _api_on_touch)
+	vm.set_global("on_join", _api_on_join)
+	vm.set_global("on_leave", _api_on_leave)
 	vm.set_global("after", func(a: Array) -> Array: return [_add_timer(a, false)])
 	vm.set_global("every", func(a: Array) -> Array: return [_add_timer(a, true)])
 	vm.set_global("cancel", _api_cancel)
@@ -141,6 +148,35 @@ func _score_get(_a: Array) -> Array:
 func _api_on_start(a: Array) -> Array:
 	_start.append(a[0] if a.size() > 0 else null)
 	return []
+
+
+func _api_on_join(a: Array) -> Array:
+	_join.append(a[0] if a.size() > 0 else null)
+	return []
+
+
+func _api_on_leave(a: Array) -> Array:
+	_leave.append(a[0] if a.size() > 0 else null)
+	return []
+
+
+## A player is ready (data = their saved data for this game).
+func fire_join(peer_id: int, data: Dictionary) -> void:
+	_pdata[peer_id] = GameData.clean(data)
+	if vm == null:
+		return
+	for fn in _join:
+		_invoke(fn, [_player_ref(peer_id)])
+
+
+func fire_leave(peer_id: int) -> void:
+	if vm != null:
+		for fn in _leave:
+			_invoke(fn, [_player_ref(peer_id)])
+	_pdata.erase(peer_id)
+	if _stats.has(peer_id):
+		_stats.erase(peer_id)
+		emit_event({"t": "stats", "s": _stats})
 
 
 func _api_on_touch(a: Array) -> Array:
@@ -293,7 +329,32 @@ func _player_ref(peer_id: int) -> RooScript.LuaTable:
 		"add_stat": _pl_add_stat.bind(peer_id),
 		"get_stat": _pl_get_stat.bind(peer_id),
 		"award_badge": _pl_badge.bind(peer_id),
+		"set_data": _pl_set_data.bind(peer_id),
+		"get_data": _pl_get_data.bind(peer_id),
 	})
+
+
+func _pl_set_data(a: Array, peer_id: int) -> Array:
+	var key := RooScript.to_str(a[1] if a.size() > 1 else "").strip_edges().substr(0, 32)
+	var v: Variant = a[2] if a.size() > 2 else null
+	if key == "":
+		return []
+	if not (v is float or v is int or v is bool):
+		v = RooScript.to_str(v).substr(0, 200)
+	if not _pdata.has(peer_id):
+		_pdata[peer_id] = {}
+	var row: Dictionary = _pdata[peer_id]
+	if not row.has(key) and row.size() >= GameData.MAX_KEYS:
+		vm._fail("too many saved values")
+		return []
+	row[key] = v
+	_player_op(peer_id, "save", [key, v])
+	return []
+
+
+func _pl_get_data(a: Array, peer_id: int) -> Array:
+	var key := RooScript.to_str(a[1] if a.size() > 1 else "")
+	return [(_pdata.get(peer_id, {}) as Dictionary).get(key, null)]
 
 
 func _stat_name(a: Array) -> String:

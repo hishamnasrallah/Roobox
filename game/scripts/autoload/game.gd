@@ -90,6 +90,10 @@ const BADGES: Array[Dictionary] = [
 	{"id": "dancer", "name": "Dancer", "desc": "Use an emote."},
 ]
 
+## Parental controls. When a PIN is set, only someone with the PIN can
+## change them. Keys: no_chat, no_online, no_publish, no_friends.
+var parental: Dictionary = {"pin": "", "no_chat": false, "no_online": false, "no_publish": false, "no_friends": false}
+
 ## Badges earned: id -> unix time. Custom game badges use "game:<game>:<name>".
 var badges: Dictionary = {}
 ## Favorite game ids (library "g:..." ids or featured experience ids).
@@ -167,6 +171,9 @@ func load_profile() -> void:
 		favorites = cfg.get_value("social", "favorites", []) as Array
 		recent = cfg.get_value("social", "recent", []) as Array
 		visits = cfg.get_value("social", "visits", {}) as Dictionary
+		var pc: Variant = cfg.get_value("settings", "parental", {})
+		if pc is Dictionary:
+			parental.merge(pc as Dictionary, true)
 	if language == "":
 		language = "ar" if OS.get_locale_language() == "ar" else "en"
 	if not (graphics in ["low", "medium", "high"]):
@@ -219,6 +226,7 @@ func save_profile() -> void:
 	cfg.set_value("social", "favorites", favorites)
 	cfg.set_value("social", "recent", recent)
 	cfg.set_value("social", "visits", visits)
+	cfg.set_value("settings", "parental", parental)
 	cfg.save(PROFILE_PATH)
 
 
@@ -369,6 +377,22 @@ func complete_course(course_name: String) -> void:
 	course_completed.emit(course_name, t)
 	Sfx.play("win")
 	award_badge("first_win")
+
+
+# ---------------------------------------------------- parental controls ---
+
+## True when a parental restriction is switched on.
+func parental_on(key: String) -> bool:
+	return bool(parental.get(key, false))
+
+
+func parental_locked() -> bool:
+	return str(parental.get("pin", "")) != ""
+
+
+## Chat is shown/sent only if the player wants it and parents allow it.
+func chat_allowed() -> bool:
+	return chat_enabled and not parental_on("no_chat")
 
 
 # ---------------------------------------------------- badges & favorites ---

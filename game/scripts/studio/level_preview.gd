@@ -109,6 +109,12 @@ static func _add(parent: Node3D, b: WorldBuilder, p: Dictionary) -> void:
 			Level.truss_beams(b, at, sz, rot, col)
 		"light":
 			b.part("ball", at, Vector3.ONE * 0.6, col, false, "neon|" + col.to_html(), rot)
+		"seat":
+			b.part("box", at - Vector3(0, sz.y * 0.25, 0), Vector3(sz.x, sz.y * 0.5, sz.z), col, false, "plain", rot)
+			b.part("box", at + Basis.from_euler(rot) * Vector3(0, sz.y * 0.5, sz.z * 0.42), Vector3(sz.x, sz.y * 1.2, sz.z * 0.16), col, false, "plain", rot)
+		"kart":
+			b.part("box", at + Vector3(0, -sz.y * 0.5 + 0.55, 0), Vector3(2.2, 0.5, 3.6), col, false, "plain", rot)
+			b.part("box", at + Vector3(0, -sz.y * 0.5 + 0.95, 0) + Basis.from_euler(rot) * Vector3(0, 0, 0.5), Vector3(1.3, 0.35, 1.2), Color(0.15, 0.15, 0.2), false, "plain", rot)
 		"speedcoil", "gravitycoil":
 			var gc := Color(1.0, 0.3, 0.3) if t == "speedcoil" else Color(0.35, 0.6, 1.0)
 			b.part("cyl", at, Vector3(0.8, 1.2, 0.8), gc, false, "neon|" + gc.to_html(), rot)

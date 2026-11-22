@@ -81,6 +81,14 @@ func _run() -> void:
 			mutual = true
 	_check(mutual, "bob and alice are friends", bf)
 
+	# --- Presence (what a friend is playing, so you can join them) ---
+	var pw := await a.write_object("presence", "now", {"exp": "ugc", "title": "Meadow Obby",
+		"server": "10.0.0.5:7777", "t": int(Time.get_unix_time_from_system())}, true)
+	_check(pw["ok"], "alice publishes presence", pw)
+	var seen := await b.read_objects([{"collection": "presence", "key": "now", "user_id": a.user_id}])
+	_check(seen.size() == 1 and str((seen[0]["value"] as Dictionary).get("server", "")) == "10.0.0.5:7777",
+		"bob sees what alice is playing", seen)
+
 	# --- RPC ---
 	var sl := await a.rpc("server_list")
 	_check(sl.has("servers"), "server_list RPC", sl)
