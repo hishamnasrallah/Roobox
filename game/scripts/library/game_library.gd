@@ -1611,7 +1611,7 @@ func _gen_arena_b() -> void:
 	var cs: Array = theme["colors"]
 	_part("kill", Vector3(0, -2, 0), Vector3(90, 1, 100), 4)
 	for side in [-1.0, 1.0]:
-		var z := side * 28.0
+		var z: float = side * 28.0
 		var tc := 4 if side < 0.0 else 8
 		_plat(0, 0, z, Vector3(28, 2, 18), int(cs[0]), str(theme["ground"]))
 		_part("block", Vector3(0, 3, z + side * 8.5), Vector3(28, 6, 1), int(cs[1]), "cobble")
