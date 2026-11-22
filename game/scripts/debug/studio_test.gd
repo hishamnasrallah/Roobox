@@ -195,9 +195,16 @@ func _run() -> void:
 	_check(added > 100 and st.part_count() == n_terrain + added, "terrain generator", added)
 	st.clear_terrain()
 	_check(st.part_count() == n_terrain, "clear terrain", st.part_count())
+	st.set_tool("select")
+	st.select(st._entry_of_part(free))
+	_check(st.copy_to_clipboard() == 1, "copy to clipboard")
+	var n_paste := st.part_count()
+	var pasted := st.paste_clipboard()
+	_check(pasted.size() == 1 and st.part_count() == n_paste + 1, "paste from clipboard", pasted.size())
+	st.select({})
 	st.set_tool("build")
 	var kk := 0
-	for id in ["corner", "truss", "fire", "smoke", "sparkles"]:
+	for id in ["corner", "truss", "fire", "smoke", "sparkles", "speedcoil", "gravitycoil"]:
 		st.set_preset(id)
 		var np := st.place_at(Vector3(-28 + kk * 5, 0, -34), Vector3.UP)
 		_check(not np.is_empty() and np["t"] == id, "place " + id)
@@ -212,6 +219,7 @@ func _run() -> void:
 end)
 every(0.5, function() score.add(1) end)
 on_touch("door", function(p)
+  p:add_stat("Touches", 1)
   p:give_coins(7)
   p:message("hi " .. p.name)
 end)
@@ -268,6 +276,19 @@ end)
 	main.call("_on_ugc_touched", "door#%d" % door_index)
 	await get_tree().process_frame
 	_check(Game.lifetime_coins == coins_before + 14, "per-part touch tokens reach on_touch", [door_index, Game.lifetime_coins])
+	var hs := host as ScriptHost
+	_check(hs != null and float((hs._stats.get(Network.my_id(), {}) as Dictionary).get("Touches", 0)) >= 2.0,
+		"player stats for the leaderboard", hs._stats if hs != null else null)
+	Game.emote_requested.emit("wave")
+	_check(player.avatar.emote == "wave" and player.emote_index() == 1, "emote plays and is sent over the network")
+	_check(Game.has_badge("dancer"), "emote badge")
+	player.give_gear("speedcoil")
+	_check(is_equal_approx(player.gear_speed, 1.6), "speed coil gear")
+	var gears := 0
+	for n3 in ex.get_children():
+		if n3 is GearPickup:
+			gears += 1
+	_check(gears == 2, "coil parts become pickups in play", gears)
 	var phys := false
 	for n2 in ex.get_children():
 		if n2 is RigidBody3D:

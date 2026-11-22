@@ -100,7 +100,7 @@ func _ready() -> void:
 	# --- Buttons (top-right) ---
 	var btn_row := HBoxContainer.new()
 	btn_row.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	btn_row.offset_left = -600
+	btn_row.offset_left = -740
 	btn_row.offset_right = -24
 	btn_row.offset_top = 16
 	btn_row.offset_bottom = 80
@@ -115,6 +115,10 @@ func _ready() -> void:
 	_players_btn.custom_minimum_size.x = 130
 	_players_btn.pressed.connect(toggle_players)
 	btn_row.add_child(_players_btn)
+	var emote_btn := UiStyle.button("EMOTE", Color(0.85, 0.4, 0.6), 22, 60)
+	emote_btn.custom_minimum_size.x = 120
+	emote_btn.pressed.connect(toggle_emotes)
+	btn_row.add_child(emote_btn)
 	var home_btn := UiStyle.button("HOME", Color(0.95, 0.5, 0.2), 24, 60)
 	home_btn.custom_minimum_size.x = 120
 	home_btn.pressed.connect(func() -> void: home_pressed.emit())
@@ -183,6 +187,8 @@ func _ready() -> void:
 
 	_build_win_panel(root)
 	_build_players_panel(root)
+	_build_emote_panel(root)
+	_build_leaderboard(root)
 	if not Game.tutorial_done and DisplayServer.get_name() != "headless":
 		_build_tutorial(root)
 
@@ -193,6 +199,8 @@ func _ready() -> void:
 	Game.course_started.connect(_on_course_started)
 	Game.course_completed.connect(_on_course_completed)
 	Network.chat_received.connect(_on_chat_received)
+	Game.badge_awarded.connect(_on_badge)
+	Game.notice.connect(_on_notice)
 	Network.player_joined.connect(_on_player_joined)
 	Network.player_left.connect(_on_player_left)
 	refresh_coins()
@@ -269,8 +277,16 @@ func close_chat() -> void:
 
 
 func _on_chat_submitted(text: String) -> void:
-	if text.strip_edges() != "":
-		Network.send_chat(text)
+	var t := text.strip_edges()
+	if t.begins_with("/e ") or t.begins_with("/emote "):
+		# Chat emote command, like "/e dance".
+		var id := t.get_slice(" ", 1).to_lower()
+		if id in Game.EMOTES and id != "":
+			Game.emote_requested.emit(id)
+		else:
+			add_chat_line("Emotes: " + ", ".join(Game.EMOTES.slice(1)), Color(0.7, 0.85, 1.0))
+	elif t != "":
+		Network.send_chat(t)
 	close_chat()
 
 
@@ -525,3 +541,142 @@ func _on_win_home() -> void:
 
 func _hide_win() -> void:
 	_win_panel.visible = false
+
+
+# -------------------------------------------------------------- emotes ---
+
+var _emote_panel: PanelContainer
+
+
+func _build_emote_panel(root: Control) -> void:
+	_emote_panel = PanelContainer.new()
+	_emote_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_emote_panel.offset_left = -470
+	_emote_panel.offset_right = -24
+	_emote_panel.offset_top = 92
+	_emote_panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
+	_emote_panel.visible = false
+	root.add_child(_emote_panel)
+	touch.blockers.append(_emote_panel)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	_emote_panel.add_child(grid)
+	for id in Game.EMOTES:
+		if id == "":
+			continue
+		var b := UiStyle.button(str(id).to_upper(), Color(0.55, 0.3, 0.6), 18, 58)
+		b.custom_minimum_size.x = 96
+		b.pressed.connect(_emote_pressed.bind(str(id)))
+		grid.add_child(b)
+	var rb := UiStyle.button("RESET", Color(0.7, 0.3, 0.3), 18, 58)
+	rb.custom_minimum_size.x = 96
+	rb.pressed.connect(_reset_pressed)
+	grid.add_child(rb)
+
+
+func _reset_pressed() -> void:
+	_emote_panel.visible = false
+	Game.kill_player()
+
+
+func toggle_emotes() -> void:
+	_emote_panel.visible = not _emote_panel.visible
+
+
+func _emote_pressed(id: String) -> void:
+	_emote_panel.visible = false
+	Game.emote_requested.emit(id)
+
+
+# -------------------------------------------------------------- badges ---
+
+func _on_notice(text: String) -> void:
+	show_toast(tr(text), Color(0.6, 0.95, 1.0))
+
+
+func _on_badge(badge_name: String, desc: String) -> void:
+	show_toast(tr("BADGE: %s") % tr(badge_name), Color(1.0, 0.85, 0.3))
+	add_chat_line(tr("You earned the badge \"%s\" - %s") % [tr(badge_name), tr(desc)], Color(1.0, 0.85, 0.3))
+	Sfx.play("win", -6.0)
+
+
+# ---------------------------------------------------------- leaderboard ---
+## Player list with stats set by game scripts (player:set_stat("Kills", 3)).
+
+var _board: PanelContainer
+var _board_grid: GridContainer
+var _board_stats: Dictionary = {}
+
+
+func _build_leaderboard(root: Control) -> void:
+	_board = PanelContainer.new()
+	_board.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_board.offset_left = -330
+	_board.offset_right = -24
+	_board.offset_top = 112
+	var sb := UiStyle.box(Color(0.05, 0.06, 0.12, 0.6), 12, 10)
+	_board.add_theme_stylebox_override("panel", sb)
+	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_board.visible = false
+	root.add_child(_board)
+	_board_grid = GridContainer.new()
+	_board_grid.add_theme_constant_override("h_separation", 14)
+	_board_grid.add_theme_constant_override("v_separation", 2)
+	_board_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_board.add_child(_board_grid)
+
+
+## stats: {peer_id: {stat_name: value}}
+func set_leaderstats(stats: Dictionary) -> void:
+	_board_stats = stats
+	for ch in _board_grid.get_children():
+		_board_grid.remove_child(ch)
+		ch.queue_free()
+	var names: Array[String] = []
+	for pid in stats:
+		for k in (stats[pid] as Dictionary):
+			if not names.has(str(k)) and names.size() < 3:
+				names.append(str(k))
+	_board.visible = not names.is_empty()
+	if names.is_empty():
+		return
+	_board_grid.columns = names.size() + 1
+	_board_cell(tr("Player"), Color(1.0, 0.85, 0.3))
+	for n in names:
+		_board_cell(n, Color(1.0, 0.85, 0.3))
+	var rows: Array = stats.keys()
+	var first := names[0]
+	rows.sort_custom(_by_first_stat.bind(first))
+	for pid in rows:
+		var row: Dictionary = stats[pid]
+		var me := int(pid) == Network.my_id()
+		_board_cell(_player_name(int(pid)), Color(0.6, 1.0, 0.6) if me else Color(1, 1, 1))
+		for n in names:
+			var v: Variant = row.get(n, 0)
+			_board_cell(RooScript.to_str(v), Color(1, 1, 1))
+
+
+func _by_first_stat(a: Variant, b: Variant, key: String) -> bool:
+	var va := float((_board_stats.get(a, {}) as Dictionary).get(key, 0)) if _is_num((_board_stats.get(a, {}) as Dictionary).get(key, 0)) else 0.0
+	var vb := float((_board_stats.get(b, {}) as Dictionary).get(key, 0)) if _is_num((_board_stats.get(b, {}) as Dictionary).get(key, 0)) else 0.0
+	return va > vb
+
+
+func _is_num(v: Variant) -> bool:
+	return v is int or v is float
+
+
+func _board_cell(text: String, col: Color) -> void:
+	var l := UiStyle.label(18, col)
+	l.text = text
+	l.custom_minimum_size.x = 60
+	_board_grid.add_child(l)
+
+
+func _player_name(pid: int) -> String:
+	if pid == Network.my_id():
+		return Game.player_name
+	var info: Dictionary = Network.players.get(pid, {})
+	return str(info.get("name", "Player %d" % pid))

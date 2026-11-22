@@ -38,6 +38,8 @@ var _score: int = 0
 var _status: String = ""
 var _ops: Dictionary = {}
 var _time: float = 0.0
+## Leaderboard: peer_id -> {stat: value}
+var _stats: Dictionary = {}
 
 
 func _ready() -> void:
@@ -86,7 +88,7 @@ func fire_touch(part_name: String, peer_id: int) -> void:
 
 
 func snapshot() -> Dictionary:
-	return {"t": "script_state", "score": _score, "status": _status, "ops": _ops.values()}
+	return {"t": "script_state", "score": _score, "status": _status, "ops": _ops.values(), "stats": _stats}
 
 
 func _invoke(fn: Variant, args: Array) -> void:
@@ -287,7 +289,51 @@ func _player_ref(peer_id: int) -> RooScript.LuaTable:
 		"set_jump": _pl_value.bind(peer_id, "jump", 2.0, 60.0),
 		"message": _pl_message.bind(peer_id),
 		"position": _pl_position.bind(peer_id),
+		"set_stat": _pl_set_stat.bind(peer_id),
+		"add_stat": _pl_add_stat.bind(peer_id),
+		"get_stat": _pl_get_stat.bind(peer_id),
+		"award_badge": _pl_badge.bind(peer_id),
 	})
+
+
+func _stat_name(a: Array) -> String:
+	return RooScript.to_str(a[1] if a.size() > 1 else "Score").strip_edges().substr(0, 16)
+
+
+func _pl_set_stat(a: Array, peer_id: int) -> Array:
+	var v: Variant = a[2] if a.size() > 2 else 0.0
+	if not (v is float or v is int):
+		v = RooScript.to_str(v).substr(0, 24)
+	_set_stat(peer_id, _stat_name(a), v)
+	return []
+
+
+func _pl_add_stat(a: Array, peer_id: int) -> Array:
+	var n := _stat_name(a)
+	var cur: Variant = (_stats.get(peer_id, {}) as Dictionary).get(n, 0.0)
+	var base := float(cur) if (cur is float or cur is int) else 0.0
+	_set_stat(peer_id, n, base + RooScript._num(a, 2))
+	return []
+
+
+func _pl_get_stat(a: Array, peer_id: int) -> Array:
+	return [(_stats.get(peer_id, {}) as Dictionary).get(_stat_name(a), 0.0)]
+
+
+func _set_stat(peer_id: int, n: String, v: Variant) -> void:
+	if not _stats.has(peer_id):
+		_stats[peer_id] = {}
+	var row: Dictionary = _stats[peer_id]
+	if not row.has(n) and row.size() >= 3:
+		vm._fail("at most 3 leaderboard stats")
+		return
+	row[n] = v
+	emit_event({"t": "stats", "s": _stats})
+
+
+func _pl_badge(a: Array, peer_id: int) -> Array:
+	_player_op(peer_id, "badge", [RooScript.to_str(a[1] if a.size() > 1 else "").strip_edges().substr(0, 32)])
+	return []
 
 
 func _pl_teleport(a: Array, peer_id: int) -> Array:

@@ -108,7 +108,12 @@ func apply_event(ev: Dictionary) -> void:
 			for op in ev.get("ops", []):
 				if op is Dictionary:
 					apply_event(op)
+			if ev.get("stats") is Dictionary and hud != null:
+				hud.set_leaderstats(ev["stats"])
 			_refresh_status()
+		"stats":
+			if ev.get("s") is Dictionary and hud != null:
+				hud.set_leaderstats(ev["s"])
 		"sop":
 			_world_op(str(ev["n"]), str(ev["op"]), ev.get("a", []))
 		"pop":
@@ -202,3 +207,9 @@ func _player_op(op: String, a: Array) -> void:
 		"message":
 			if hud != null:
 				hud.show_toast(str(a[0]), Color(0.6, 0.9, 1.0))
+		"badge":
+			var bname := str(a[0]) if a.size() > 0 else ""
+			if bname != "" and not Game.testing:
+				Game.award_badge("game:%s:%s" % [str(level.get("name", "Game")).replace(":", " "), bname.replace(":", " ")])
+			elif bname != "" and hud != null:
+				hud.show_toast("BADGE (test): " + bname, Color(1.0, 0.85, 0.3))

@@ -63,6 +63,7 @@ func _ready() -> void:
 	Network.player_joined.connect(_on_player_joined)
 	Network.player_left.connect(_on_player_left)
 	Network.state_received.connect(_on_state_received)
+	Network.chat_received.connect(_on_chat_bubble)
 	Network.mode_event.connect(_on_network_mode_event)
 	Network.script_touched.connect(_on_script_touched)
 
@@ -454,6 +455,19 @@ func _go_home() -> void:
 
 
 # ------------------------------------------------------------ network ---
+
+## Chat speech bubbles above the speaker.
+func _on_chat_bubble(id: int, sender: String, text: String) -> void:
+	if not Game.chat_enabled or sender in Game.muted:
+		return
+	var av: Avatar = null
+	if id == Network.my_id() and player != null:
+		av = player.avatar
+	elif _remotes.has(id):
+		av = (_remotes[id] as RemotePlayer).avatar
+	if av != null and is_instance_valid(av):
+		av.say(ChatFilter.clean(text))
+
 
 func _add_remote(id: int, info: Dictionary) -> void:
 	if _remotes.has(id) or experience == null:

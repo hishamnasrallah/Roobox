@@ -199,6 +199,8 @@ class CardArt:
 
 
 func _build_discover() -> void:
+	_quick_row("Continue playing", Game.recent)
+	_quick_row("Favorites", Game.favorites)
 	_text(_content, "Discover", 34, Color(1.0, 0.85, 0.3))
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -407,6 +409,7 @@ func _show_library_detail(game_id: String) -> void:
 	_hero("lib_" + game_id, _library_level.bind(game_id), col)
 	_text(_content, e["title"], 40, col.lightened(0.35))
 	_text(_content, e["desc"], 21, Color(1, 1, 1, 0.9))
+	_fav_row(game_id)
 	_text(_content, tr("Type: %s   -   Map: %s   -   Difficulty: %s") % [tr(str(e["genre_title"])), tr(str(e["layout"])), tr(str(e["difficulty"]))], 17, Color(1, 1, 1, 0.65))
 	for spec in [["PLAY SOLO", Color(0.2, 0.72, 0.35), "offline"], ["HOST ON WI-FI", Color(0.25, 0.5, 0.95), "host"]]:
 		var b := UiStyle.button(spec[0], spec[1])
@@ -434,7 +437,72 @@ func _join_from(exp_id: String, addr: LineEdit) -> void:
 	_join(exp_id, addr.text)
 
 
+## A sideways row of games by id (recently played / favorites).
+func _quick_row(title: String, ids: Array) -> void:
+	var tiles: Array = []
+	for id in ids:
+		var t := _tile_for(str(id))
+		if t != null:
+			tiles.append(t)
+	if tiles.is_empty():
+		return
+	_text(_content, title, 30, Color(1.0, 0.85, 0.3))
+	var sc := TouchScroll.make(true)
+	sc.custom_minimum_size.y = 192
+	_content.add_child(sc)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	sc.add_child(row)
+	for t in tiles:
+		row.add_child(t)
+
+
+func _tile_for(id: String) -> GameTile:
+	if id.begins_with("g:"):
+		var e := GameLibrary.entry(id)
+		if e.is_empty():
+			return null
+		return _lib_card(e, Vector2(232, 182)) as GameTile
+	var c := Catalog.get_entry(id)
+	if c.is_empty() or str(c["id"]) != id or c.get("hidden", false):
+		return null
+	var gt := GameTile.new()
+	gt.game_id = id
+	gt.title = tr(str(c["title"]))
+	gt.subtitle = str(c.get("tag", ""))
+	gt.color = c["color"]
+	gt.tile_size = Vector2(232, 182)
+	gt.chosen.connect(_show_detail)
+	return gt
+
+
+## FAVORITE toggle + "played N times" line for a detail page.
+func _fav_row(id: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	var fav := UiStyle.button("", Color(0.75, 0.3, 0.45), 18, 50)
+	fav.custom_minimum_size.x = 200
+	_style_fav(fav, Game.is_favorite(id))
+	fav.pressed.connect(_toggle_fav.bind(id, fav))
+	row.add_child(fav)
+	var plays := int(Game.visits.get(id, 0))
+	var l := _text(row, tr("You played this %d times") % plays if plays > 0 else tr("New for you"), 18, Color(1, 1, 1, 0.7))
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+
+func _toggle_fav(id: String, b: Button) -> void:
+	_style_fav(b, Game.toggle_favorite(id))
+
+
+func _style_fav(b: Button, on: bool) -> void:
+	b.text = tr("FAVORITED") if on else tr("+ FAVORITE")
+	b.add_theme_stylebox_override("normal", UiStyle.box(Color(0.85, 0.3, 0.45) if on else Color(0.3, 0.33, 0.45), 18, 10))
+
+
 func _play_library(game_id: String, mode: String) -> void:
+	Game.note_played(game_id)
 	Game.pending_level = GameLibrary.generate(game_id)
 	Game.testing = false
 	_play("ugc", mode, "")
@@ -598,6 +666,7 @@ func _show_detail(exp_id: String) -> void:
 	_text(_content, e["title"], 44, col.lightened(0.35))
 	_text(_content, e["desc"], 22, Color(1, 1, 1, 0.9))
 	_text(_content, _best_text(exp_id), 20, Color(1.0, 0.85, 0.3))
+	_fav_row(exp_id)
 
 	var solo := UiStyle.button("PLAY SOLO", Color(0.2, 0.72, 0.35))
 	solo.pressed.connect(func() -> void: _play(exp_id, "offline", ""))
@@ -650,6 +719,7 @@ func _best_text(exp_id: String) -> String:
 
 
 func _play(exp_id: String, mode: String, address: String) -> void:
+	Game.note_played(exp_id)
 	_save_name_if_needed()
 	play_requested.emit(exp_id, mode, address)
 
@@ -694,6 +764,40 @@ func _build_avatar() -> void:
 	_content.add_child(grid)
 	for it: Dictionary in AvatarItems.ITEMS:
 		grid.add_child(_shop_item(it))
+	_build_badges()
+
+
+func _build_badges() -> void:
+	var have := 0
+	for b: Dictionary in Game.BADGES:
+		if Game.has_badge(b["id"]):
+			have += 1
+	_text(_content, tr("Badges (%d / %d)") % [have, Game.BADGES.size()], 30, Color(1.0, 0.85, 0.3))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	_content.add_child(grid)
+	var ids: Array = []
+	for b: Dictionary in Game.BADGES:
+		ids.append(b["id"])
+	for k: String in Game.badges:
+		if k.begins_with("game:"):
+			ids.append(k)
+	for id: String in ids:
+		var info := Game.badge_info(id)
+		var got := Game.has_badge(id)
+		var card := PanelContainer.new()
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var sb := UiStyle.box(Color(0.35, 0.28, 0.08) if got else Color(0.12, 0.13, 0.2), 14, 10)
+		sb.border_color = Color(1.0, 0.8, 0.25) if got else Color(1, 1, 1, 0.1)
+		sb.set_border_width_all(3)
+		card.add_theme_stylebox_override("panel", sb)
+		grid.add_child(card)
+		var vb := VBoxContainer.new()
+		card.add_child(vb)
+		_text(vb, tr(str(info["name"])), 20, Color(1.0, 0.9, 0.5) if got else Color(1, 1, 1, 0.5))
+		_text(vb, tr(str(info["desc"])) if got or not id.begins_with("game:") else "", 14, Color(1, 1, 1, 0.65 if got else 0.4))
 
 
 func _shop_item(it: Dictionary) -> Control:
@@ -955,6 +1059,8 @@ func _add_friend(input: LineEdit, info: Label, list: VBoxContainer) -> void:
 	if not is_instance_valid(info):
 		return
 	info.text = "Request sent to @%s" % uname if r.get("ok", false) else "Could not add: %s" % r.get("error", "?")
+	if r.get("ok", false):
+		Game.award_badge("friend")
 	input.text = ""
 	_reload_friends(list)
 

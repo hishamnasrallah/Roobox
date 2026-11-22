@@ -32,6 +32,14 @@ var _squash_vel: float = 0.0
 var _bank: float = 0.0
 var _last_yaw: float = 0.0
 
+## Current emote ("" = none, see Game.EMOTES). Moving or jumping pauses it.
+var emote: String = ""
+## Local avatars stop timed emotes by themselves; remote ones follow the network.
+var auto_expire: bool = true
+var _emote_w: float = 0.0
+var _emote_t: float = 0.0
+const EMOTE_TIME := {"wave": 2.6, "cheer": 2.4, "point": 2.4, "clap": 2.8, "laugh": 2.4}
+
 
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -201,3 +209,114 @@ func animate(delta: float, speed_ratio: float, on_floor: bool, vertical_speed: f
 	_squash += _squash_vel * delta
 	var sq := clampf(_squash, -0.3, 0.4)
 	_body.scale = Vector3(1.0 + sq * 0.5, 1.0 - sq, 1.0 + sq * 0.5)
+
+	# --- Emotes (blended over the base pose) ---
+	_emote_t += delta
+	if auto_expire and EMOTE_TIME.has(emote) and _emote_t > float(EMOTE_TIME[emote]):
+		emote = ""
+	var still := _move_w < 0.25 and _air_w < 0.3
+	_emote_w = lerpf(_emote_w, 1.0 if emote != "" and still else 0.0, k_fast)
+	if _emote_w > 0.01 and emote != "":
+		_apply_emote(_emote_w)
+
+
+## Speech bubble above the head (chat), fades after a few seconds.
+var _bubble: Label3D
+var _bubble_tw: Tween
+
+
+func say(text: String) -> void:
+	if _bubble == null:
+		_bubble = Label3D.new()
+		_bubble.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_bubble.font_size = 44
+		_bubble.outline_size = 0
+		_bubble.modulate = Color(0.08, 0.08, 0.12)
+		_bubble.width = 520.0
+		_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_bubble.pixel_size = 0.006
+		_bubble.position = Vector3(0, 3.6, 0)
+		_bubble.no_depth_test = true
+		_bubble.render_priority = 5
+		var bg := MeshInstance3D.new()
+		bg.name = "Bg"
+		var qm := QuadMesh.new()
+		qm.size = Vector2(3.4, 0.8)
+		bg.mesh = qm
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		mat.albedo_color = Color(1, 1, 1, 0.92)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.no_depth_test = true
+		mat.render_priority = 4
+		bg.material_override = mat
+		bg.position = Vector3(0, 0, -0.01)
+		_bubble.add_child(bg)
+		add_child(_bubble)
+	_bubble.text = text.substr(0, 90)
+	var lines := ceili(float(_bubble.text.length()) / 26.0)
+	var bg2 := _bubble.get_node("Bg") as MeshInstance3D
+	(bg2.mesh as QuadMesh).size = Vector2(minf(0.17 * _bubble.text.length() + 0.5, 3.4), 0.36 + 0.3 * lines)
+	_bubble.visible = true
+	_bubble.modulate.a = 1.0
+	if _bubble_tw != null:
+		_bubble_tw.kill()
+	_bubble_tw = create_tween()
+	_bubble_tw.tween_interval(6.0)
+	_bubble_tw.tween_callback(_hide_bubble)
+
+
+func _hide_bubble() -> void:
+	if _bubble != null:
+		_bubble.visible = false
+
+
+func play_emote(id: String) -> void:
+	if id == emote:
+		return
+	emote = id
+	_emote_t = 0.0
+
+
+func _apply_emote(w: float) -> void:
+	var t := _emote_t
+	match emote:
+		"wave":
+			_arm_r.rotation.z = lerpf(_arm_r.rotation.z, 2.7 + sin(t * 9.0) * 0.35, w)
+			_arm_r.rotation.x = lerpf(_arm_r.rotation.x, 0.0, w)
+			_head.rotation.z = lerpf(_head.rotation.z, 0.12, w)
+		"cheer":
+			_arm_l.rotation.z = lerpf(_arm_l.rotation.z, -2.8 + sin(t * 10.0) * 0.15, w)
+			_arm_r.rotation.z = lerpf(_arm_r.rotation.z, 2.8 - sin(t * 10.0) * 0.15, w)
+			_hips.position.y += absf(sin(t * 6.0)) * 0.14 * w
+		"point":
+			_arm_r.rotation.x = lerpf(_arm_r.rotation.x, 1.55, w)
+			_arm_r.rotation.z = lerpf(_arm_r.rotation.z, 0.1, w)
+			_head.rotation.y = lerpf(_head.rotation.y, -0.15, w)
+		"clap":
+			var c := absf(sin(t * 9.0)) * 0.3
+			_arm_l.rotation.x = lerpf(_arm_l.rotation.x, 1.25, w)
+			_arm_r.rotation.x = lerpf(_arm_r.rotation.x, 1.25, w)
+			_arm_l.rotation.z = lerpf(_arm_l.rotation.z, 0.1 + c, w)
+			_arm_r.rotation.z = lerpf(_arm_r.rotation.z, -0.1 - c, w)
+		"dance":
+			var d := sin(t * 6.0)
+			_arm_l.rotation.z = lerpf(_arm_l.rotation.z, -1.3 - d * 0.8, w)
+			_arm_r.rotation.z = lerpf(_arm_r.rotation.z, 1.3 - d * 0.8, w)
+			_leg_l.rotation.x = lerpf(_leg_l.rotation.x, d * 0.45, w)
+			_leg_r.rotation.x = lerpf(_leg_r.rotation.x, -d * 0.45, w)
+			_torso.rotation.y = lerpf(_torso.rotation.y, d * 0.4, w)
+			_body.rotation.z = lerpf(_body.rotation.z, sin(t * 3.0) * 0.15, w)
+			_hips.position.y += absf(d) * 0.1 * w
+		"sit":
+			_leg_l.rotation.x = lerpf(_leg_l.rotation.x, 1.5, w)
+			_leg_r.rotation.x = lerpf(_leg_r.rotation.x, 1.5, w)
+			_arm_l.rotation.x = lerpf(_arm_l.rotation.x, 0.5, w)
+			_arm_r.rotation.x = lerpf(_arm_r.rotation.x, 0.5, w)
+			_hips.position.y -= 0.72 * w
+		"laugh":
+			_torso.rotation.x = lerpf(_torso.rotation.x, -0.25 + sin(t * 14.0) * 0.08, w)
+			_head.rotation.x = lerpf(_head.rotation.x, -0.3, w)
+			_arm_l.rotation.z = lerpf(_arm_l.rotation.z, -0.5, w)
+			_arm_r.rotation.z = lerpf(_arm_r.rotation.z, 0.5, w)

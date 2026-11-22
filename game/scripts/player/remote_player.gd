@@ -95,4 +95,7 @@ func _process(delta: float) -> void:
 	avatar.global_position = pos
 	avatar.rotation.y = yaw
 	var hs := Vector2(vel.x, vel.z).length()
+	avatar.auto_expire = false
+	var ei := (flags >> 2) & 15
+	avatar.play_emote(Game.EMOTES[ei] if ei < Game.EMOTES.size() else "")
 	avatar.animate(delta, hs / 8.5, (flags & 1) != 0, vel.y)

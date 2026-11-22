@@ -90,8 +90,17 @@ end)
 - **القطع:** `world.find(name)` ← `set_color` · `set_visible` · `set_solid` · `move_to` · `move_by` · `position` · `destroy`
 - **اللاعب:** `teleport` · `kill` · `give_coins` · `set_speed` · `set_jump` · `message` · `position` · `player.name`
 - **الواجهة والنقاط:** `ui.message` · `ui.status` · `score.add/set/get`
+- **لوحة النقاط والبادجات:** `player:set_stat(name, v)` · `player:add_stat(name, n)` · `player:get_stat(name)` (لحد 3 أعمدة بالزاوية) · `player:award_badge(name)`
 - **اللغة:** متغيرات، جداول، دوال وclosures، `if/while/repeat/for/for-in`، `pairs/ipairs`، مكتبات `math/string/table`.
 - السكربت بيشتغل عند الـ Host (أو بالـ Solo) وتأثيره على العالم بيوصل لكل اللاعبين. فيه حد للخطوات بيوقف أي حلقة لا نهائية، وأخطاء بأرقام الأسطر.
+
+## داخل اللعبة
+
+- **EMOTE:** 7 حركات (WAVE، DANCE، CHEER، POINT، CLAP، SIT، LAUGH) بتبيّن لكل اللاعبين، أو اكتب `/e dance` بالشات. **RESET** بيرجعك لآخر checkpoint.
+- **فقاعات كلام** فوق راس اللي بيحكي، **لوحة نقاط** لما اللعبة بتستعملها، و**بادجات** (شوفها بتبويب AVATAR).
+- **أدوات:** Speed Coil (أسرع) و Gravity Coil (قفز أعلى) لحد ما تموت.
+- تبويب PLAY: **كمّل اللعب** و**المفضّلة** (زر FAVORITE بصفحة كل لعبة).
+- قائمة الفروق الكاملة مع روبلوكس وخطة تطويرها: [docs/ROBLOX_GAP.md](docs/ROBLOX_GAP.md).
 
 ## العالم
 

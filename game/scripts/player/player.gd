@@ -37,6 +37,9 @@ var water_count: int = 0
 var climb_count: int = 0
 var external_velocity: Vector3 = Vector3.ZERO
 var _boost_t: float = 0.0
+## Gear effects (reset when you respawn).
+var gear_speed: float = 1.0
+var gear_gravity: float = 1.0
 
 const NET_RATE := 1.0 / 20.0
 
@@ -58,6 +61,7 @@ func _ready() -> void:
 	add_child(col)
 
 	Game.player_died.connect(_on_died)
+	Game.emote_requested.connect(play_emote)
 
 
 func _physics_process(delta: float) -> void:
@@ -73,11 +77,13 @@ func _physics_process(delta: float) -> void:
 
 	# --- Horizontal movement relative to the camera ---
 	var input := Game.get_move_input()
+	if input.length() > 0.1 and avatar != null and avatar.emote != "":
+		avatar.emote = ""
 	var yaw := camera_rig.yaw if camera_rig != null else 0.0
 	var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
 	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
 	var wish := right * input.x + forward * input.y
-	var speed_now := max_speed * (1.8 if _boost_t > 0.0 else 1.0)
+	var speed_now := max_speed * gear_speed * (1.8 if _boost_t > 0.0 else 1.0)
 	_boost_t = maxf(_boost_t - delta, 0.0)
 	var target := wish * speed_now
 
@@ -100,7 +106,7 @@ func _physics_process(delta: float) -> void:
 		if Game.is_jump_held():
 			velocity.y = move_toward(velocity.y, 4.5, 25.0 * delta)
 	elif not on_floor:
-		var g := gravity
+		var g := gravity * gear_gravity
 		if velocity.y < 0.0:
 			g *= fall_multiplier
 		velocity.y = maxf(velocity.y - g * delta, -48.0)
@@ -151,7 +157,7 @@ func _physics_process(delta: float) -> void:
 	_net_timer += delta
 	if _net_timer >= NET_RATE and Network.is_online():
 		_net_timer = 0.0
-		var flags := (1 if is_on_floor() else 0) | (2 if _dead else 0)
+		var flags := (1 if is_on_floor() else 0) | (2 if _dead else 0) | (emote_index() << 2)
 		var net_yaw := avatar.rotation.y if avatar != null else _target_yaw
 		Network.send_state(global_position, net_yaw, get_real_velocity(), flags)
 
@@ -181,6 +187,32 @@ func _try_step_up(dir: Vector3) -> void:
 	global_position += up + dir * 0.18
 	move_and_collide(Vector3(0, -STEP_HEIGHT, 0))
 	velocity.y = 0.0
+
+
+## Picked up gear (see GearPickup).
+func give_gear(kind: String) -> void:
+	match kind:
+		"speedcoil":
+			gear_speed = 1.6
+		"gravitycoil":
+			gear_gravity = 0.45
+	Sfx.play("checkpoint")
+	Game.notice.emit(str(GearPickup.INFO.get(kind, {"name": kind})["name"]) + "!")
+
+
+## Plays an emote (wave, dance...). Moving cancels it.
+func play_emote(id: String) -> void:
+	if avatar == null or not (id in Game.EMOTES):
+		return
+	avatar.play_emote(id)
+	if id != "":
+		Game.award_badge("dancer")
+
+
+func emote_index() -> int:
+	if avatar == null:
+		return 0
+	return maxi(Game.EMOTES.find(avatar.emote), 0)
 
 
 func get_speed_ratio() -> float:
@@ -245,6 +277,8 @@ func _on_died() -> void:
 
 
 func _respawn() -> void:
+	gear_speed = 1.0
+	gear_gravity = 1.0
 	global_position = Game.checkpoint_position
 	velocity = Vector3.ZERO
 	_control_lock = 0.0

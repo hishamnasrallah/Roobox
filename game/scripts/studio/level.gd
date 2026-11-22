@@ -50,6 +50,8 @@ const PRESETS: Array[Dictionary] = [
 	{"id": "teleport", "label": "TELEPORT", "t": "teleport", "s": [3, 1, 3], "c": 9, "cat": "game"},
 	{"id": "coin", "label": "COIN", "t": "coin", "s": [1, 1, 1], "c": 6, "cat": "game"},
 	{"id": "ladder", "label": "LADDER", "t": "ladder", "s": [2, 6, 1], "c": 3, "cat": "game"},
+	{"id": "speedcoil", "label": "SPEED COIL", "t": "speedcoil", "s": [1, 2, 1], "c": 4, "cat": "game"},
+	{"id": "gravitycoil", "label": "GRAVITY COIL", "t": "gravitycoil", "s": [1, 2, 1], "c": 8, "cat": "game"},
 	{"id": "water", "label": "WATER", "t": "water", "s": [4, 4, 4], "c": 8, "cat": "nature"},
 	{"id": "tree", "label": "TREE", "t": "tree", "s": [3, 6, 3], "c": 7, "cat": "nature"},
 	{"id": "sign", "label": "SIGN", "t": "sign", "s": [4, 2, 1], "c": 3, "cat": "nature"},
@@ -60,7 +62,8 @@ const PRESETS: Array[Dictionary] = [
 ]
 
 const SPECIAL := ["spawn", "checkpoint", "kill", "jumppad", "coin", "finish", "spikes", "speed",
-	"conveyor", "teleport", "water", "ladder", "light", "sign", "tree", "truss", "fire", "smoke", "sparkles"]
+	"conveyor", "teleport", "water", "ladder", "light", "sign", "tree", "truss", "fire", "smoke", "sparkles",
+	"speedcoil", "gravitycoil"]
 const SOLID := ["block", "ramp", "ball", "cyl", "stairs", "cone", "corner"]
 ## Decorative particle emitters (no collision).
 const EFFECTS := ["fire", "smoke", "sparkles"]
@@ -304,6 +307,11 @@ static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 				tv.rotation = rot
 				tv.setup(sz + Vector3(1.0, 0.4, 1.0))
 				parent.add_child(tv)
+			"speedcoil", "gravitycoil":
+				var gp := GearPickup.new()
+				gp.kind = t
+				gp.position = at
+				parent.add_child(gp)
 			"fire", "smoke", "sparkles":
 				var fx := effect_node(t, col, sz)
 				fx.position = at

@@ -9,6 +9,12 @@ signal player_respawned
 signal course_started(course_name: String)
 signal course_completed(course_name: String, time_sec: float)
 signal settings_changed
+## Ask the local player to play an emote ("" stops it).
+signal emote_requested(id: String)
+## Short message for the HUD (e.g. "SPEED COIL!").
+signal notice(text: String)
+## A badge was earned (shown as a toast by the HUD).
+signal badge_awarded(badge_name: String, desc: String)
 
 const LOOK_SENSITIVITY_MOUSE := 0.0045
 const LOOK_SENSITIVITY_TOUCH := 0.0065
@@ -65,6 +71,33 @@ var tutorial_done: bool = false
 var muted: Array = []
 
 const DAILY_REWARD := 100
+
+## Emotes: index is sent over the network (0 = none).
+const EMOTES: Array[String] = ["", "wave", "dance", "cheer", "point", "clap", "sit", "laugh"]
+
+## Built-in badges (games made in Studio can award their own with scripts).
+const BADGES: Array[Dictionary] = [
+	{"id": "welcome", "name": "Welcome!", "desc": "Play your first game."},
+	{"id": "first_win", "name": "Winner", "desc": "Finish a course or win a round."},
+	{"id": "coins_100", "name": "Coin Collector", "desc": "Collect 100 coins in total."},
+	{"id": "coins_1000", "name": "Treasure Hunter", "desc": "Collect 1000 coins in total."},
+	{"id": "explorer", "name": "Explorer", "desc": "Play 10 different games."},
+	{"id": "globetrotter", "name": "Globetrotter", "desc": "Play 50 different games."},
+	{"id": "creator", "name": "Creator", "desc": "Save a game you made in Studio."},
+	{"id": "publisher", "name": "Publisher", "desc": "Publish a game for everyone."},
+	{"id": "fashion", "name": "Fashionista", "desc": "Buy an avatar item."},
+	{"id": "friend", "name": "Friendly", "desc": "Add a friend."},
+	{"id": "dancer", "name": "Dancer", "desc": "Use an emote."},
+]
+
+## Badges earned: id -> unix time. Custom game badges use "game:<game>:<name>".
+var badges: Dictionary = {}
+## Favorite game ids (library "g:..." ids or featured experience ids).
+var favorites: Array = []
+## Recently played ids, newest first.
+var recent: Array = []
+## Times each game was started: id -> count.
+var visits: Dictionary = {}
 ## Account server (Nakama), e.g. "http://203.0.113.5:7350". Empty = guest.
 var backend_url: String = ""
 var backend_key: String = "defaultkey"
@@ -130,6 +163,10 @@ func load_profile() -> void:
 		backend_url = str(cfg.get_value("online", "backend_url", ""))
 		backend_key = str(cfg.get_value("online", "backend_key", "defaultkey"))
 		device_id = str(cfg.get_value("online", "device_id", ""))
+		badges = cfg.get_value("social", "badges", {}) as Dictionary
+		favorites = cfg.get_value("social", "favorites", []) as Array
+		recent = cfg.get_value("social", "recent", []) as Array
+		visits = cfg.get_value("social", "visits", {}) as Dictionary
 	if language == "":
 		language = "ar" if OS.get_locale_language() == "ar" else "en"
 	if not (graphics in ["low", "medium", "high"]):
@@ -178,6 +215,10 @@ func save_profile() -> void:
 	cfg.set_value("online", "backend_url", backend_url)
 	cfg.set_value("online", "backend_key", backend_key)
 	cfg.set_value("online", "device_id", device_id)
+	cfg.set_value("social", "badges", badges)
+	cfg.set_value("social", "favorites", favorites)
+	cfg.set_value("social", "recent", recent)
+	cfg.set_value("social", "visits", visits)
 	cfg.save(PROFILE_PATH)
 
 
@@ -230,6 +271,7 @@ func buy(id: String) -> String:
 	owned_items.append(id)
 	equipped[it["slot"]] = id
 	save_profile()
+	award_badge("fashion")
 	return ""
 
 
@@ -284,6 +326,14 @@ func add_coin() -> void:
 	lifetime_coins += 1
 	coins_changed.emit(coins)
 	Sfx.play("coin")
+	check_coin_badges()
+
+
+func check_coin_badges() -> void:
+	if lifetime_coins >= 100:
+		award_badge("coins_100")
+	if lifetime_coins >= 1000:
+		award_badge("coins_1000")
 
 
 func set_checkpoint(pos: Vector3) -> void:
@@ -318,6 +368,65 @@ func complete_course(course_name: String) -> void:
 		save_profile()
 	course_completed.emit(course_name, t)
 	Sfx.play("win")
+	award_badge("first_win")
+
+
+# ---------------------------------------------------- badges & favorites ---
+
+func badge_info(id: String) -> Dictionary:
+	for b in BADGES:
+		if b["id"] == id:
+			return b
+	if id.begins_with("game:"):
+		var parts := id.split(":", true, 2)
+		return {"id": id, "name": parts[2] if parts.size() > 2 else id, "desc": "Earned in %s" % (parts[1] if parts.size() > 1 else "a game")}
+	return {}
+
+
+func has_badge(id: String) -> bool:
+	return badges.has(id)
+
+
+## Awards a badge once. Built-in ids from BADGES, or a game badge:
+## award_badge("game:My Obby:Speedrunner"). Returns true if it is new.
+func award_badge(id: String) -> bool:
+	if badges.has(id) or badge_info(id).is_empty():
+		return false
+	badges[id] = int(Time.get_unix_time_from_system())
+	save_profile()
+	var b := badge_info(id)
+	badge_awarded.emit(str(b["name"]), str(b["desc"]))
+	return true
+
+
+## Remembers that a game was started (recent list, visits, badges).
+func note_played(id: String) -> void:
+	if id == "" or id == "ugc":
+		return
+	recent.erase(id)
+	recent.push_front(id)
+	while recent.size() > 12:
+		recent.pop_back()
+	visits[id] = int(visits.get(id, 0)) + 1
+	save_profile()
+	award_badge("welcome")
+	if visits.size() >= 10:
+		award_badge("explorer")
+	if visits.size() >= 50:
+		award_badge("globetrotter")
+
+
+func is_favorite(id: String) -> bool:
+	return favorites.has(id)
+
+
+func toggle_favorite(id: String) -> bool:
+	if favorites.has(id):
+		favorites.erase(id)
+	else:
+		favorites.push_front(id)
+	save_profile()
+	return favorites.has(id)
 
 
 func kill_player() -> void:

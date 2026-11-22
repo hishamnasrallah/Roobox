@@ -614,6 +614,8 @@ func save() -> bool:
 		slot = Level.new_slot()
 	var ok := Level.save_slot(slot, level)
 	_say("Saved!" if ok else "Could not save.")
+	if ok and part_count() > 3:
+		Game.award_badge("creator")
 	return ok
 
 
@@ -896,6 +898,79 @@ func ungroup_selected() -> void:
 		_sel = [_sel[0]]
 		_update_selection()
 	_say("Ungrouped.")
+
+
+# ============================================================ clipboard ===
+
+const CLIPBOARD := "user://clipboard.json"
+
+
+## Copies the selection to a clipboard file that every game can paste from.
+func copy_to_clipboard() -> int:
+	if _sel.is_empty():
+		_say("Select something to copy first.")
+		return 0
+	var box := _sel_aabb()
+	var base := Vector3(box.get_center().x, box.position.y, box.get_center().z)
+	var out: Array = []
+	for e in _sel:
+		var p: Dictionary = (e["part"] as Dictionary).duplicate(true)
+		if p["t"] == "spawn":
+			continue
+		p["p"] = Level._arr(Level.pos(p) - base)
+		p.erase("g")
+		p.erase("k")
+		out.append(p)
+	var f := FileAccess.open(CLIPBOARD, FileAccess.WRITE)
+	if f == null:
+		return 0
+	f.store_string(JSON.stringify({"parts": out}))
+	_say("Copied %d parts - open any game and press PASTE." % out.size())
+	return out.size()
+
+
+## Pastes the clipboard at the white dot (as one group). Returns the parts.
+func paste_clipboard() -> Array:
+	if not FileAccess.file_exists(CLIPBOARD):
+		_say("The clipboard is empty - select parts and press CLIPBOARD.")
+		return []
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(CLIPBOARD))
+	if not (data is Dictionary) or not ((data as Dictionary).get("parts") is Array):
+		return []
+	var list: Array = data["parts"]
+	if part_count() + list.size() > Level.MAX_PARTS:
+		_say("Part limit reached (%d)." % Level.MAX_PARTS)
+		return []
+	var at := Vector3(snappedf(_focus.x, grid), snappedf(_focus.y, grid), snappedf(_focus.z, grid))
+	var g := _new_group() if list.size() > 1 else ""
+	var batch: Array = []
+	for item in list:
+		if not (item is Dictionary):
+			continue
+		var p: Dictionary = (item as Dictionary).duplicate(true)
+		p["p"] = Level._arr(Level._vec(p.get("p"), Vector3.ZERO) + at)
+		if g != "":
+			p["g"] = g
+		var clean := Level._clean_part(p)
+		if clean.is_empty():
+			continue
+		_add_part(clean)
+		batch.append({"op": "add", "part": clean, "index": _index_of(clean)})
+	if batch.is_empty():
+		return []
+	_record({"op": "batch", "items": batch} if batch.size() > 1 else batch[0])
+	if not (tool in SEL_TOOLS):
+		set_tool("select")
+	var was := multi
+	multi = false
+	select(_entry_of_part(batch[0]["part"]))
+	multi = was
+	_refresh_ui()
+	_say("Pasted %d parts." % batch.size())
+	var out: Array = []
+	for b: Dictionary in batch:
+		out.append(b["part"])
+	return out
 
 
 func unlock_all() -> void:
@@ -1382,7 +1457,7 @@ func _add_visual(body: Node3D, part: Dictionary, t: String, s: Vector3, col: Col
 			wire.albedo_color = Color(col, 0.18)
 			_mesh(body, Vector3.ZERO, s, wire)
 			return
-	var glow := t in ["kill", "jumppad", "coin", "speed", "teleport", "conveyor"]
+	var glow := t in ["kill", "jumppad", "coin", "speed", "teleport", "conveyor", "speedcoil", "gravitycoil"]
 	var mi := MeshInstance3D.new()
 	mi.mesh = _cache.unit_mesh(shape)
 	mi.scale = s
@@ -1552,6 +1627,7 @@ func _build_options() -> void:
 	var specs := [["grid", "GRID 1", cycle_grid, 96], ["turn", "TURN 90", cycle_rot_step, 100],
 		["rot", "ROTATE", rotate_preset, 104], ["air", "AIR", toggle_air, 86],
 		["multi", "MULTI", toggle_multi, 84], ["focus", "FOCUS", focus_selection, 84],
+		["paste", "PASTE", paste_clipboard, 84],
 		["sky", "SKY", cycle_env, 116]]
 	for spec in specs:
 		var b := _btn(spec[1], Color(0.25, 0.3, 0.48), 14, 42, spec[3])
@@ -1633,7 +1709,8 @@ func _build_props() -> void:
 		["alpha", cycle_transparency], ["lock", toggle_flag.bind("k")],
 		["motion", cycle_motion], ["focus", focus_selection],
 		["group", group_selected], ["ungroup", ungroup_selected],
-		["copy", duplicate_selected], ["delete", delete_selected]]
+		["copy", duplicate_selected], ["clipboard", copy_to_clipboard],
+		["delete", delete_selected]]
 	for spec in specs:
 		var b := _btn(str(spec[0]).to_upper(), Color(0.3, 0.33, 0.5) if spec[0] != "delete" else Color(0.6, 0.3, 0.3), 13, 40)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2149,6 +2226,8 @@ func _on_publish() -> void:
 	_say("Publishing...")
 	var ok: bool = await Backend.publish_game(slot, level)
 	_say("Published! Players can find it in COMMUNITY." if ok else "Publish failed - try again.")
+	if ok:
+		Game.award_badge("publisher")
 
 
 func _on_exit() -> void:
