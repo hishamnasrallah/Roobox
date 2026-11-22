@@ -204,6 +204,12 @@ func _run() -> void:
 	st.select({})
 	st.set_tool("build")
 	var kk := 0
+	st.set_preset("teamspawn")
+	st.set_color(4)
+	st.place_at(Vector3(-10, 0, -26), Vector3.UP)
+	st.set_color(8)
+	st.place_at(Vector3(10, 0, -26), Vector3.UP)
+	st.color_index = -1
 	st.set_preset("seat")
 	st.place_at(Vector3(-20, 0, 10), Vector3.UP)
 	st.set_preset("kart")
@@ -224,6 +230,7 @@ end)
 every(0.5, function() score.add(1) end)
 on_join(function(p)
   p:set_stat("Joined", 1)
+  p:set_stat("Team", p.team)
   p:set_data("visits", (p:get_data("visits") or 0) + 1)
 end)
 on_touch("door", function(p)
@@ -300,6 +307,10 @@ end)
 	_check(hs != null and float((hs._stats.get(Network.my_id(), {}) as Dictionary).get("Joined", 0)) == 1.0
 		and float((hs._pdata.get(Network.my_id(), {}) as Dictionary).get("visits", 0)) == 1.0,
 		"on_join runs with saved player data", hs._pdata if hs != null else null)
+	_check((ex.get("teams") as Dictionary).size() == 2 and int(ex.get("my_team")) == 8, "team spawns make a team game",
+		[ex.get("teams"), ex.get("my_team")])
+	_check(hs != null and str((hs._stats.get(Network.my_id(), {}) as Dictionary).get("Team", "")) == "Blue",
+		"scripts see the player's team", hs._stats if hs != null else null)
 	var kart: Kart = null
 	var seat: Seat = null
 	for n4 in ex.get_children():

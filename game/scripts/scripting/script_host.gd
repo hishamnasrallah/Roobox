@@ -24,6 +24,8 @@ var source: String = ""
 var player_pos_provider: Callable = Callable()
 ## (peer_id) -> String
 var player_name_provider: Callable = Callable()
+## (peer_id) -> String ; team name ("" = no teams)
+var team_provider: Callable = Callable()
 ## (name) -> Vector3 ; first part with that name
 var part_pos_provider: Callable = Callable()
 ## Names of parts that exist in the level.
@@ -315,9 +317,11 @@ func _player_ref(peer_id: int) -> RooScript.LuaTable:
 	var pname := "Player"
 	if player_name_provider.is_valid():
 		pname = player_name_provider.call(peer_id)
+	var team := str(team_provider.call(peer_id)) if team_provider.is_valid() else ""
 	return vm.make_table({
 		"id": float(peer_id),
 		"name": pname,
+		"team": team,
 		"teleport": _pl_teleport.bind(peer_id),
 		"kill": _pl_simple.bind(peer_id, "kill"),
 		"give_coins": _pl_coins.bind(peer_id),

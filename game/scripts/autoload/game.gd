@@ -94,6 +94,9 @@ const BADGES: Array[Dictionary] = [
 ## change them. Keys: no_chat, no_online, no_publish, no_friends.
 var parental: Dictionary = {"pin": "", "no_chat": false, "no_online": false, "no_publish": false, "no_friends": false}
 
+## "" = not asked yet, "under13", "13plus" (asked on first launch).
+var age_group: String = ""
+
 ## Badges earned: id -> unix time. Custom game badges use "game:<game>:<name>".
 var badges: Dictionary = {}
 ## Favorite game ids (library "g:..." ids or featured experience ids).
@@ -171,6 +174,7 @@ func load_profile() -> void:
 		favorites = cfg.get_value("social", "favorites", []) as Array
 		recent = cfg.get_value("social", "recent", []) as Array
 		visits = cfg.get_value("social", "visits", {}) as Dictionary
+		age_group = str(cfg.get_value("settings", "age_group", ""))
 		var pc: Variant = cfg.get_value("settings", "parental", {})
 		if pc is Dictionary:
 			parental.merge(pc as Dictionary, true)
@@ -227,6 +231,7 @@ func save_profile() -> void:
 	cfg.set_value("social", "recent", recent)
 	cfg.set_value("social", "visits", visits)
 	cfg.set_value("settings", "parental", parental)
+	cfg.set_value("settings", "age_group", age_group)
 	cfg.save(PROFILE_PATH)
 
 
@@ -384,6 +389,15 @@ func complete_course(course_name: String) -> void:
 ## True when a parental restriction is switched on.
 func parental_on(key: String) -> bool:
 	return bool(parental.get(key, false))
+
+
+## First-launch age answer. Younger players start with chat off
+## (a parent can change it in SETTINGS > Parental controls).
+func set_age_group(group: String) -> void:
+	age_group = group
+	if group == "under13":
+		parental["no_chat"] = true
+	save_profile()
 
 
 func parental_locked() -> bool:

@@ -1468,7 +1468,7 @@ func _add_visual(body: Node3D, part: Dictionary, t: String, s: Vector3, col: Col
 			wire.albedo_color = Color(col, 0.18)
 			_mesh(body, Vector3.ZERO, s, wire)
 			return
-	var glow := t in ["kill", "jumppad", "coin", "speed", "teleport", "conveyor", "speedcoil", "gravitycoil"]
+	var glow := t in ["kill", "jumppad", "coin", "speed", "teleport", "conveyor", "speedcoil", "gravitycoil", "teamspawn"]
 	var mi := MeshInstance3D.new()
 	mi.mesh = _cache.unit_mesh(shape)
 	mi.scale = s

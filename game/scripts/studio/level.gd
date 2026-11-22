@@ -40,6 +40,7 @@ const PRESETS: Array[Dictionary] = [
 	{"id": "cyl", "label": "ROUND", "t": "cyl", "s": [2, 2, 2], "c": 10, "cat": "parts"},
 	{"id": "truss", "label": "TRUSS", "t": "truss", "s": [2, 6, 2], "c": 1, "cat": "parts"},
 	{"id": "spawn", "label": "SPAWN", "t": "spawn", "s": [4, 1, 4], "c": 8, "cat": "game"},
+	{"id": "teamspawn", "label": "TEAM SPAWN", "t": "teamspawn", "s": [4, 1, 4], "c": 4, "cat": "game"},
 	{"id": "checkpoint", "label": "CHECKPOINT", "t": "checkpoint", "s": [4, 1, 4], "c": 7, "cat": "game"},
 	{"id": "finish", "label": "FINISH", "t": "finish", "s": [4, 1, 4], "c": 6, "cat": "game"},
 	{"id": "kill", "label": "LAVA", "t": "kill", "s": [2, 1, 2], "c": 4, "cat": "game"},
@@ -65,7 +66,7 @@ const PRESETS: Array[Dictionary] = [
 
 const SPECIAL := ["spawn", "checkpoint", "kill", "jumppad", "coin", "finish", "spikes", "speed",
 	"conveyor", "teleport", "water", "ladder", "light", "sign", "tree", "truss", "fire", "smoke", "sparkles",
-	"speedcoil", "gravitycoil", "seat", "kart"]
+	"speedcoil", "gravitycoil", "seat", "kart", "teamspawn"]
 const SOLID := ["block", "ramp", "ball", "cyl", "stairs", "cone", "corner"]
 ## Decorative particle emitters (no collision).
 const EFFECTS := ["fire", "smoke", "sparkles"]
@@ -81,6 +82,9 @@ const MOTION_LABELS: Dictionary = {
 	"spin": "SPIN", "spin_fast": "SPIN FAST",
 }
 const MAX_SCRIPT := 20000
+## Names for the colors (team names, script colors).
+const COLOR_NAMES: Array[String] = ["White", "Gray", "Green", "Brown", "Red", "Orange", "Yellow",
+	"Lime", "Blue", "Purple", "Pink", "Snow"]
 
 
 static func new_level(level_name: String = "My Game") -> Dictionary:
@@ -239,6 +243,28 @@ static func part_aabb(part: Dictionary) -> AABB:
 	return AABB(pos(part) - ext, ext * 2.0)
 
 
+## Team spawns: {color_index: [spawn positions]} (empty = no teams).
+## A game has teams when it has TEAM SPAWNs of 2 or more colors.
+static func team_spawns(level: Dictionary) -> Dictionary:
+	var out := {}
+	for p: Dictionary in level["parts"]:
+		if p["t"] == "teamspawn":
+			var c := int(p["c"])
+			if not out.has(c):
+				out[c] = []
+			(out[c] as Array).append(pos(p) + Vector3(0, size(p).y * 0.5 + 0.6, 0))
+	return out if out.size() >= 2 else {}
+
+
+## Which team (color index) a player is on: spread by peer id.
+static func team_for(peer_id: int, teams: Dictionary) -> int:
+	if teams.is_empty():
+		return -1
+	var colors: Array = teams.keys()
+	colors.sort()
+	return int(colors[absi(peer_id) % colors.size()])
+
+
 static func spawn_point(level: Dictionary) -> Vector3:
 	for p: Dictionary in level["parts"]:
 		if p["t"] == "spawn":
@@ -347,6 +373,10 @@ static func build_play(parent: Node3D, level: Dictionary) -> Dictionary:
 					b.part("box", at + Basis.from_euler(rot) * (st[0] as Vector3), st[1], mat_color(mat, col), true, mat_kind(mat, col), rot)
 			"spawn":
 				b.part("box", at, sz, col, true, "tiled", rot)
+			"teamspawn":
+				b.part("box", at, sz, col, true, "tiled", rot)
+				b.part("cyl", at + Vector3(sz.x * 0.4, sz.y * 0.5 + 1.5, sz.z * 0.4), Vector3(0.2, 3, 0.2), Color(0.8, 0.8, 0.85), false, "plain", rot)
+				b.part("box", at + Vector3(sz.x * 0.4 + 0.6, sz.y * 0.5 + 2.6, sz.z * 0.4), Vector3(1.2, 0.7, 0.08), col, false, "neon|" + col.to_html(), rot)
 			"checkpoint":
 				b.part("box", at, sz, col.darkened(0.2), true, "tiled", rot)
 				var cp := Checkpoint.new()

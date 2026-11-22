@@ -79,7 +79,7 @@ static func _add(parent: Node3D, b: WorldBuilder, p: Dictionary) -> void:
 		"stairs":
 			for st: Array in Level.stair_steps(sz):
 				b.part("box", at + Basis.from_euler(rot) * (st[0] as Vector3), st[1], Level.mat_color(mat, col), false, Level.mat_kind(mat, col), rot)
-		"spawn", "checkpoint", "finish":
+		"spawn", "checkpoint", "finish", "teamspawn":
 			b.part("box", at, sz, col, false, "tiled", rot)
 		"kill":
 			b.part("box", at, sz, Color(1.0, 0.4, 0.1), false, "neon|" + Color(1.0, 0.4, 0.1).to_html(), rot)

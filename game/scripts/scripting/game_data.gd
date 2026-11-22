@@ -14,6 +14,27 @@ static func _all() -> Dictionary:
 	return d if d is Dictionary else {}
 
 
+static func all_games() -> Dictionary:
+	return _all()
+
+
+## Cloud -> device: adds values this device doesn't have yet.
+static func merge(cloud: Dictionary) -> void:
+	var all := _all()
+	for game in cloud:
+		if not (cloud[game] is Dictionary):
+			continue
+		var g: Dictionary = all.get(game, {}) if all.get(game) is Dictionary else {}
+		var incoming := clean(cloud[game])
+		for k in incoming:
+			if not g.has(k) and g.size() < MAX_KEYS:
+				g[k] = incoming[k]
+		all[str(game).substr(0, 40)] = g
+	var f := FileAccess.open(PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(all))
+
+
 static func load_game(game: String) -> Dictionary:
 	var g: Variant = _all().get(game, {})
 	return g if g is Dictionary else {}

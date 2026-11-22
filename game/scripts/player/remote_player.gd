@@ -36,6 +36,12 @@ func setup(id: int, info: Dictionary) -> void:
 	avatar.add_child(_label)
 
 
+## Team games: color the name tag.
+func set_team_color(c: Color) -> void:
+	if _label != null:
+		_label.modulate = c.lightened(0.3)
+
+
 func push_state(pos: Vector3, yaw: float, vel: Vector3, flags: int) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if _snaps.is_empty():

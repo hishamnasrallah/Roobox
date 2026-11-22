@@ -100,12 +100,18 @@ func _run() -> void:
 	_check(ok and Backend.online, "Backend autoload signs in", Backend.last_error)
 	Game.lifetime_coins = 7
 	Game.best_times = {"Sky Tower": 99.0}
+	Game.badges = {"welcome": 1700000000}
+	Game.favorites = ["g:obby:meadow"]
 	await Backend.push_progress()
 	Game.lifetime_coins = 0
 	Game.best_times = {}
+	Game.badges = {}
+	Game.favorites = []
 	await Backend.pull_progress()
 	_check(Game.lifetime_coins == 7 and float(Game.best_times.get("Sky Tower", 0.0)) == 99.0,
 		"progress round-trips through the cloud", [Game.lifetime_coins, Game.best_times])
+	_check(Game.has_badge("welcome") and Game.is_favorite("g:obby:meadow"),
+		"badges and favorites round-trip through the cloud", [Game.badges, Game.favorites])
 	var servers := await Backend.game_servers()
 	_check(servers.size() >= 1, "game server list (with fallback)", servers)
 

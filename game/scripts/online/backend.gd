@@ -161,7 +161,20 @@ func pull_progress() -> void:
 	var scores: Dictionary = cloud.get("best_scores", {})
 	for board: String in scores:
 		Game.best_scores[board] = maxi(int(Game.best_scores.get(board, 0)), int(scores[board]))
+	var cb: Variant = cloud.get("badges", {})
+	if cb is Dictionary:
+		for id in cb:
+			if not Game.badges.has(str(id)) and not Game.badge_info(str(id)).is_empty():
+				Game.badges[str(id)] = int(cb[id])
+	var cf: Variant = cloud.get("favorites", [])
+	if cf is Array:
+		for id in cf:
+			if not Game.favorites.has(str(id)) and Game.favorites.size() < 100:
+				Game.favorites.append(str(id))
 	Game.save_profile()
+	var gd := await client.read_object("progress", "gamedata")
+	if not gd.is_empty():
+		GameData.merge(gd)
 
 
 func push_progress() -> void:
@@ -177,7 +190,10 @@ func push_progress() -> void:
 		"owned": Game.owned_items,
 		"equipped": Game.equipped,
 		"last_daily": Game.last_daily,
+		"badges": Game.badges,
+		"favorites": Game.favorites,
 	})
+	await client.write_object("progress", "gamedata", GameData.all_games())
 	await client.write_object("profile", "avatar", {
 		"shirt": Game.shirt_index, "pants": Game.pants_index, "skin": Game.skin_index,
 	}, true)

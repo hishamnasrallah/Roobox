@@ -402,6 +402,7 @@ func _setup_ugc_scripts() -> void:
 		host.part_pos_provider = func(n: String) -> Vector3: return ugc.call("part_position", n)
 		host.player_pos_provider = _player_position
 		host.player_name_provider = _player_name
+		host.team_provider = func(pid: int) -> String: return str(ugc.call("team_name", pid))
 		host.event.connect(_on_authority_event)
 		host.log_line.connect(_on_script_log)
 		game_mode = host
@@ -476,7 +477,7 @@ func _go_home() -> void:
 		return
 	Game.reset_checkpoint_to_spawn()
 	player.kill_height = experience.kill_height
-	player.teleport(experience.spawn_point)
+	player.teleport(Game.spawn_point)
 
 
 # ------------------------------------------------------------ network ---
@@ -502,6 +503,8 @@ func _add_remote(id: int, info: Dictionary) -> void:
 	experience.add_child(rp)
 	rp.setup(id, info)
 	_remotes[id] = rp
+	if experience.has_method("team_name") and str(experience.call("team_name", id)) != "":
+		rp.set_team_color(experience.call("team_color", id))
 
 
 func _on_player_joined(id: int, info: Dictionary) -> void:

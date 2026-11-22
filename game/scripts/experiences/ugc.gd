@@ -13,6 +13,9 @@ var registry: Dictionary = {}
 var score: int = -1
 var status_text: String = ""
 var _touch_cooldown: Dictionary = {}
+## Team spawns {color: [pos]} (empty = no teams) and my team color.
+var teams: Dictionary = {}
+var my_team: int = -1
 
 
 func setup() -> void:
@@ -33,6 +36,7 @@ func setup() -> void:
 	sky_label.position = spawn_point + Vector3(0, 7, -8)
 	add_child(sky_label)
 	_add_touch_areas()
+	teams = Level.team_spawns(level)
 	var host := get_parent()
 	if host != null and host.has_method("apply_env"):
 		host.call("apply_env", str(level.get("env", "day")))
@@ -46,6 +50,17 @@ func part_names() -> Array:
 	return (registry.get("by_name", {}) as Dictionary).keys()
 
 
+## Team name of a player ("" when the game has no teams).
+func team_name(peer_id: int) -> String:
+	var t := Level.team_for(peer_id, teams)
+	return Level.COLOR_NAMES[t] if t >= 0 else ""
+
+
+func team_color(peer_id: int) -> Color:
+	var t := Level.team_for(peer_id, teams)
+	return Level.COLORS[t] if t >= 0 else Color(1, 1, 1)
+
+
 func part_position(n: String) -> Vector3:
 	var nodes: Array = _nodes_for(n)
 	for node in nodes:
@@ -54,10 +69,19 @@ func part_position(n: String) -> Vector3:
 	return Vector3.ZERO
 
 
-func on_player_ready(_p: Player) -> void:
+func on_player_ready(p: Player) -> void:
 	Game.checkpoint_position = spawn_point
-	for p: Dictionary in level["parts"]:
-		if p["t"] == "finish":
+	if not teams.is_empty():
+		my_team = Level.team_for(Network.my_id(), teams)
+		var spots: Array = teams[my_team]
+		var at: Vector3 = spots[randi() % spots.size()]
+		Game.spawn_point = at
+		Game.checkpoint_position = at
+		p.teleport(at)
+		if hud != null:
+			hud.show_toast(tr("You are on the %s team") % tr(Level.COLOR_NAMES[my_team]), Level.COLORS[my_team])
+	for part: Dictionary in level["parts"]:
+		if part["t"] == "finish":
 			Game.start_course(str(level["name"]))
 			break
 	_refresh_status()

@@ -96,6 +96,41 @@ func _ready() -> void:
 	Backend.status_changed.connect(_refresh_account)
 	_refresh_account()
 	open_tab("PLAY")
+	if Game.age_group == "" and DisplayServer.get_name() != "headless":
+		_ask_age(root)
+
+
+# -------------------------------------------------------------- age gate ---
+
+func _ask_age(root: Control) -> void:
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0, 0, 0, 0.6)
+	root.add_child(shade)
+	var panel := PanelContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	panel.offset_left = -330
+	panel.offset_right = 330
+	panel.offset_top = -170
+	panel.offset_bottom = 170
+	panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
+	shade.add_child(panel)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	panel.add_child(vb)
+	_text(vb, "Welcome to Roobox!", 34, Color(1.0, 0.85, 0.3))
+	_text(vb, "How old are you? This keeps the game safe for younger players.", 20)
+	for spec in [["UNDER 13", "under13", Color(0.25, 0.5, 0.95)], ["13 OR OLDER", "13plus", Color(0.2, 0.72, 0.35)]]:
+		var b := UiStyle.button(spec[0], spec[2], 26, 64)
+		b.pressed.connect(_age_chosen.bind(str(spec[1]), shade))
+		vb.add_child(b)
+
+
+func _age_chosen(group: String, overlay: Control) -> void:
+	Game.set_age_group(group)
+	overlay.queue_free()
+	if group == "under13":
+		show_status(tr("Chat is off. A parent can change it in SETTINGS > Parental controls."))
 
 
 # ---------------------------------------------------------------- tabs ---
