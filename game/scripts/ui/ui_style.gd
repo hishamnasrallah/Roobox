@@ -67,3 +67,26 @@ static func line_edit(placeholder: String, font_size: int = 28) -> LineEdit:
 	le.add_theme_color_override("font_color", Color(1, 1, 1))
 	le.add_theme_color_override("font_placeholder_color", Color(1, 1, 1, 0.45))
 	return le
+
+
+## Round button with a drawn icon (HUD).
+static func icon_button(kind: String, color: Color = Color(0.1, 0.12, 0.22, 0.72), px: float = 64.0) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(px, px)
+	b.focus_mode = Control.FOCUS_NONE
+	var n := box(color, int(px * 0.5), 0)
+	n.border_color = Color(1, 1, 1, 0.18)
+	n.set_border_width_all(2)
+	b.add_theme_stylebox_override("normal", n)
+	b.add_theme_stylebox_override("hover", box(color.lightened(0.15), int(px * 0.5), 0))
+	b.add_theme_stylebox_override("pressed", box(color.darkened(0.2), int(px * 0.5), 0))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var icon := UiIcon.make(kind, Color(1, 1, 1), px * 0.5)
+	icon.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	icon.offset_left = -px * 0.25
+	icon.offset_right = px * 0.25
+	icon.offset_top = -px * 0.25
+	icon.offset_bottom = px * 0.25
+	b.add_child(icon)
+	b.pressed.connect(func() -> void: Sfx.play("click"))
+	return b

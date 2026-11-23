@@ -30,6 +30,15 @@ var _return_scroll: int = -1
 var _in_detail: bool = false
 
 
+const BG := Color(0.06, 0.07, 0.14)
+const NAV := [["PLAY", "home"], ["CREATE", "create"], ["AVATAR", "avatar"], ["FRIENDS", "friends"],
+	["RECORDS", "trophy"], ["SETTINGS", "gear"]]
+
+var _page_bg: ColorRect
+var _column: MarginContainer
+var _coins_label: Label
+
+
 func _ready() -> void:
 	layer = 20
 	var root := Control.new()
@@ -37,63 +46,63 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	var shade := ColorRect.new()
-	shade.anchor_right = 0.64
-	shade.anchor_bottom = 1.0
-	shade.color = Color(0.03, 0.04, 0.1, 0.45)
-	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(shade)
+	# Opaque page background (the 3D scene is only shown on the AVATAR tab).
+	_page_bg = ColorRect.new()
+	_page_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_page_bg.color = BG
+	_page_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_page_bg)
 
-	var margin := MarginContainer.new()
-	margin.anchor_right = 0.64
-	margin.anchor_bottom = 1.0
-	for side in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 20)
-	root.add_child(margin)
+	_column = MarginContainer.new()
+	_column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right"]:
+		_column.add_theme_constant_override("margin_" + side, 18)
+	_column.add_theme_constant_override("margin_top", 10)
+	_column.add_theme_constant_override("margin_bottom", 8)
+	root.add_child(_column)
 
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 10)
-	margin.add_child(vb)
+	vb.add_theme_constant_override("separation", 8)
+	_column.add_child(vb)
 
-	# Header: logo + account.
+	# Header: logo, name, coins, account.
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 16)
+	head.add_theme_constant_override("separation", 12)
 	vb.add_child(head)
 	var logo := TextureRect.new()
 	logo.texture = load("res://icon.svg")
-	logo.custom_minimum_size = Vector2(64, 64)
+	logo.custom_minimum_size = Vector2(48, 48)
 	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(logo)
-	var title := UiStyle.label(56, Color(1.0, 0.85, 0.25))
+	var title := UiStyle.label(38, Color(1.0, 0.85, 0.25))
 	title.text = "PLAZO"
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	head.add_child(title)
-	_account_label = UiStyle.label(18, Color(0.75, 0.9, 1.0))
+	_account_label = UiStyle.label(15, Color(0.75, 0.82, 1.0, 0.8))
 	_account_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_account_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_account_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_account_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	head.add_child(_account_label)
-
-	# Tabs.
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 8)
-	vb.add_child(tabs)
-	for t in ["PLAY", "CREATE", "AVATAR", "FRIENDS", "RECORDS", "SETTINGS"]:
-		var b := UiStyle.button(t, Color(0.25, 0.3, 0.48), 18, 54)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var tab_name: String = t
-		b.pressed.connect(func() -> void: open_tab(tab_name))
-		tabs.add_child(b)
-		_tab_buttons[t] = b
+	var pill := PanelContainer.new()
+	pill.add_theme_stylebox_override("panel", UiStyle.box(Color(0.14, 0.16, 0.3), 22, 8))
+	head.add_child(pill)
+	var prow := HBoxContainer.new()
+	prow.add_theme_constant_override("separation", 6)
+	pill.add_child(prow)
+	prow.add_child(UiIcon.make("coin", Color.WHITE, 28))
+	_coins_label = UiStyle.label(22, Color(1.0, 0.88, 0.4))
+	_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	prow.add_child(_coins_label)
 
 	# Quick jumps inside the long PLAY page.
 	_jump_bar = HBoxContainer.new()
 	_jump_bar.add_theme_constant_override("separation", 8)
 	vb.add_child(_jump_bar)
 	for spec in [["TOP", "top"], ["ALL GAMES", "games"], ["COMMUNITY", "community"]]:
-		var jb := UiStyle.button(str(spec[0]), Color(0.2, 0.24, 0.38), 15, 42)
+		var jb := UiStyle.button(str(spec[0]), Color(0.14, 0.17, 0.3), 15, 40)
 		jb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		jb.focus_mode = Control.FOCUS_NONE
 		jb.pressed.connect(jump_to.bind(str(spec[1])))
@@ -102,7 +111,10 @@ func _ready() -> void:
 	# Content area.
 	var panel := PanelContainer.new()
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_theme_stylebox_override("panel", UiStyle.panel_style())
+	var psb := UiStyle.box(Color(0.09, 0.1, 0.2, 0.92), 20, 16)
+	psb.border_color = Color(1, 1, 1, 0.06)
+	psb.set_border_width_all(2)
+	panel.add_theme_stylebox_override("panel", psb)
 	vb.add_child(panel)
 	var scroll := TouchScroll.make(false)
 	panel.add_child(scroll)
@@ -112,15 +124,77 @@ func _ready() -> void:
 	_content.add_theme_constant_override("separation", 12)
 	scroll.add_child(_content)
 
-	_status = UiStyle.label(20, Color(1, 1, 1, 0.85))
+	_status = UiStyle.label(18, Color(1, 1, 1, 0.85))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vb.add_child(_status)
+
+	# Bottom navigation bar with icons.
+	var nav := PanelContainer.new()
+	nav.add_theme_stylebox_override("panel", UiStyle.box(Color(0.1, 0.11, 0.22), 22, 6))
+	vb.add_child(nav)
+	var nrow := HBoxContainer.new()
+	nrow.add_theme_constant_override("separation", 4)
+	nav.add_child(nrow)
+	for item in NAV:
+		var nb := Button.new()
+		nb.custom_minimum_size = Vector2(0, 64)
+		nb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nb.focus_mode = Control.FOCUS_NONE
+		nb.pressed.connect(open_tab.bind(str(item[0])))
+		var col := VBoxContainer.new()
+		col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		col.alignment = BoxContainer.ALIGNMENT_CENTER
+		col.add_theme_constant_override("separation", 2)
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		nb.add_child(col)
+		var ic := UiIcon.make(str(item[1]), Color(1, 1, 1), 26)
+		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		col.add_child(ic)
+		var lab := UiStyle.label(13)
+		lab.text = tr(str(item[0]))
+		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(lab)
+		nb.set_meta("icon", ic)
+		nb.set_meta("label", lab)
+		nrow.add_child(nb)
+		_tab_buttons[item[0]] = nb
 
 	Backend.status_changed.connect(_refresh_account)
 	_refresh_account()
 	open_tab("PLAY")
 	if Game.age_group == "" and DisplayServer.get_name() != "headless":
 		_ask_age(root)
+
+
+func _exit_tree() -> void:
+	# The game and Studio need the 3D view again.
+	if get_viewport() != null:
+		get_viewport().disable_3d = false
+
+
+## Page layout per tab: full width and no 3D rendering behind, except on
+## AVATAR where the 3D character preview shows on the right.
+func _layout_for(t: String) -> void:
+	var avatar := t == "AVATAR"
+	_page_bg.visible = not avatar
+	_column.anchor_right = 0.62 if avatar else 1.0
+	_column.offset_right = 0
+	if not DisplayServer.get_name() == "headless":
+		get_viewport().disable_3d = not avatar
+	for k: String in _tab_buttons:
+		var b: Button = _tab_buttons[k]
+		var on := k == t
+		var sb := UiStyle.box(Color(0.95, 0.55, 0.2, 0.95) if on else Color(0, 0, 0, 0), 18, 4)
+		for st in ["normal", "hover", "pressed"]:
+			b.add_theme_stylebox_override(st, sb)
+		(b.get_meta("label") as Label).modulate = Color(1, 1, 1) if on else Color(1, 1, 1, 0.6)
+		(b.get_meta("icon") as UiIcon).modulate = Color(1, 1, 1) if on else Color(1, 1, 1, 0.6)
+
+
+## Columns that fit the current page width (cards of `card` px).
+func _columns(card: float, lo: int, hi: int) -> int:
+	var w := get_viewport().get_visible_rect().size.x * (0.62 if _tab == "AVATAR" else 1.0) - 80.0
+	return clampi(int(w / card), lo, hi)
 
 
 # -------------------------------------------------------------- age gate ---
@@ -164,10 +238,7 @@ func open_tab(t: String) -> void:
 	_anchors.clear()
 	if _jump_bar != null:
 		_jump_bar.visible = t == "PLAY"
-	for k: String in _tab_buttons:
-		var btn: Button = _tab_buttons[k]
-		var c := Color(0.95, 0.55, 0.2) if k == t else Color(0.25, 0.3, 0.48)
-		btn.add_theme_stylebox_override("normal", UiStyle.box(c, 18, 10))
+	_layout_for(t)
 	for ch in _content.get_children():
 		ch.queue_free()
 	_busy_buttons.clear()
@@ -242,7 +313,9 @@ func go_back() -> bool:
 
 func _refresh_account() -> void:
 	if _account_label != null:
-		_account_label.text = "%s\n%s" % [Backend.status_text(), tr("Coins: %d") % Game.wallet()]
+		_account_label.text = Backend.status_text()
+	if _coins_label != null:
+		_coins_label.text = str(Game.wallet())
 
 
 func set_busy(busy: bool) -> void:
@@ -316,7 +389,7 @@ func _build_discover() -> void:
 	_quick_row("Favorites", Game.favorites)
 	_text(_content, "Discover", 34, Color(1.0, 0.85, 0.3))
 	var grid := GridContainer.new()
-	grid.columns = 2
+	grid.columns = _columns(380.0, 2, 4)
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	_content.add_child(grid)
@@ -376,7 +449,7 @@ func _build_library() -> void:
 	_lib_rows.add_theme_constant_override("separation", 10)
 	_content.add_child(_lib_rows)
 	_lib_grid = GridContainer.new()
-	_lib_grid.columns = 3
+	_lib_grid.columns = _columns(250.0, 2, 8)
 	_lib_grid.add_theme_constant_override("h_separation", 10)
 	_lib_grid.add_theme_constant_override("v_separation", 10)
 	_content.add_child(_lib_grid)
@@ -458,7 +531,7 @@ func _lib_row(g: Dictionary, all: Array) -> void:
 	row_scroll.add_child(row)
 	var n := 0
 	for e: Dictionary in all:
-		if e["genre"] == g["id"] and n < 10:
+		if e["genre"] == g["id"] and n < 8:
 			row.add_child(_lib_card(e, Vector2(232, 182)))
 			n += 1
 

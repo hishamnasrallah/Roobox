@@ -696,11 +696,11 @@ func _auto_quality(delta: float) -> void:
 	if not _in_game or _headless or Game.graphics == "low":
 		_fps_low_t = 0.0
 		return
-	if Engine.get_frames_per_second() < 26:
+	if Engine.get_frames_per_second() < 40:
 		_fps_low_t += delta
 	else:
 		_fps_low_t = maxf(_fps_low_t - delta * 2.0, 0.0)
-	if _fps_low_t > 8.0:
+	if _fps_low_t > 5.0:
 		_fps_low_t = 0.0
 		Game.graphics = "medium" if Game.graphics == "high" else "low"
 		Game.save_profile()
@@ -722,16 +722,19 @@ func _apply_graphics() -> void:
 			_env.glow_enabled = false
 		"high":
 			_sun.shadow_enabled = true
+			_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 			_sun.directional_shadow_max_distance = 110.0
 			vp.msaa_3d = Viewport.MSAA_4X
 			vp.scaling_3d_scale = 1.0
 			_env.glow_enabled = true
 		_:
+			# Phones: one shadow cascade, lower 3D resolution, no glow blur.
 			_sun.shadow_enabled = true
-			_sun.directional_shadow_max_distance = 70.0
+			_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+			_sun.directional_shadow_max_distance = 55.0
 			vp.msaa_3d = Viewport.MSAA_2X
-			vp.scaling_3d_scale = 0.85
-			_env.glow_enabled = true
+			vp.scaling_3d_scale = 0.8
+			_env.glow_enabled = false
 
 
 ## Sky/lighting presets used by creations: day, sunset, night, space, fog.

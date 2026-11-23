@@ -100,31 +100,31 @@ func _ready() -> void:
 	# --- Buttons (top-right) ---
 	var btn_row := HBoxContainer.new()
 	btn_row.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	btn_row.offset_left = -740
+	btn_row.offset_left = -420
 	btn_row.offset_right = -24
 	btn_row.offset_top = 16
 	btn_row.offset_bottom = 80
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
 	btn_row.add_theme_constant_override("separation", 10)
 	root.add_child(btn_row)
-	var chat_btn := UiStyle.button("CHAT", Color(0.25, 0.5, 0.95), 24, 60)
-	chat_btn.custom_minimum_size.x = 120
+	var chat_btn := UiStyle.icon_button("chat")
+	chat_btn.tooltip_text = "Chat"
 	chat_btn.pressed.connect(open_chat)
 	btn_row.add_child(chat_btn)
-	_players_btn = UiStyle.button("PLAYERS", Color(0.45, 0.35, 0.65), 22, 60)
-	_players_btn.custom_minimum_size.x = 130
+	_players_btn = UiStyle.icon_button("people")
+	_players_btn.tooltip_text = "Players"
 	_players_btn.pressed.connect(toggle_players)
 	btn_row.add_child(_players_btn)
-	var emote_btn := UiStyle.button("EMOTE", Color(0.85, 0.4, 0.6), 22, 60)
-	emote_btn.custom_minimum_size.x = 120
+	var emote_btn := UiStyle.icon_button("smile")
+	emote_btn.tooltip_text = "Emotes"
 	emote_btn.pressed.connect(toggle_emotes)
 	btn_row.add_child(emote_btn)
-	var home_btn := UiStyle.button("HOME", Color(0.95, 0.5, 0.2), 24, 60)
-	home_btn.custom_minimum_size.x = 120
+	var home_btn := UiStyle.icon_button("home")
+	home_btn.tooltip_text = "Back to spawn"
 	home_btn.pressed.connect(func() -> void: home_pressed.emit())
 	btn_row.add_child(home_btn)
-	var menu_btn := UiStyle.button("MENU", Color(0.45, 0.45, 0.55), 24, 60)
-	menu_btn.custom_minimum_size.x = 120
+	var menu_btn := UiStyle.icon_button("menu", Color(0.55, 0.3, 0.2, 0.8))
+	menu_btn.tooltip_text = "Menu"
 	menu_btn.pressed.connect(func() -> void: menu_pressed.emit())
 	btn_row.add_child(menu_btn)
 
